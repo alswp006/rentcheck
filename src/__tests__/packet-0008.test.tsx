@@ -141,7 +141,7 @@ const okResult: SimulationResult = {
 };
 
 function renderWithState(input: SimulationInput) {
-  const { default: ResultPage } = require("@/pages/ResultPage");
+  const { default: ResultPage } = require("../pages/ResultPage");
   return render(
     React.createElement(
       MemoryRouter,

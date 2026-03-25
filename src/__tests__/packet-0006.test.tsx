@@ -13,8 +13,13 @@ vi.mock("@toss/tds-mobile", () => ({
   Button: ({ children, onClick, ...props }: any) =>
     React.createElement("button", { onClick, ...props }, children),
   ListRow: Object.assign(
-    ({ children, onClick, ...props }: any) =>
-      React.createElement("div", { onClick, "data-testid": "list-row", ...props }, children),
+    ({ children, onClick, title, ...props }: any) =>
+      React.createElement(
+        "div",
+        { onClick, "data-testid": "list-row", ...props },
+        title && React.createElement("span", null, title),
+        children,
+      ),
     {
       Text: ({ children }: any) => React.createElement("span", null, children),
       Texts: ({ top, bottom }: any) =>

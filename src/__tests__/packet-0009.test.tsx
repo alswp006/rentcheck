@@ -143,9 +143,9 @@ const sampleEntries: HistoryEntry[] = [
   makeEntry("entry-2", "월세 보증금 5천 · 3년"),
 ];
 
+import HistoryPage from "../pages/HistoryPage";
+
 function renderPage() {
-  vi.resetModules();
-  const { default: HistoryPage } = require("../pages/HistoryPage");
   return render(
     React.createElement(MemoryRouter, null, React.createElement(HistoryPage)),
   );

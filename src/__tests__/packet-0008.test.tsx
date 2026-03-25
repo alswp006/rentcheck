@@ -78,6 +78,11 @@ vi.mock("@toss/tds-mobile", () => ({
   ),
 }));
 
+// ─── AdSlot mock ──────────────────────────────────────────────────────────────
+vi.mock("@/components/AdSlot", () => ({
+  AdSlot: () => React.createElement("div", { "data-testid": "ad-slot" }),
+}));
+
 // ─── AppState mock ────────────────────────────────────────────────────────────
 vi.mock("@/lib/state/useAppState", () => ({
   useAppState: () => ({
@@ -140,8 +145,9 @@ const okResult: SimulationResult = {
   updatedAt: 1700000000000,
 };
 
+import ResultPage from "../pages/ResultPage";
+
 function renderWithState(input: SimulationInput) {
-  const { default: ResultPage } = require("../pages/ResultPage");
   return render(
     React.createElement(
       MemoryRouter,
@@ -156,7 +162,6 @@ describe("결과 페이지(/result) 1차: 입력 hydrate + 시뮬레이션 실�
   beforeEach(() => {
     mockNavigate.mockClear();
     mockSimulate.mockClear();
-    vi.resetModules();
   });
 
   it("AC-1: location.state의 SimulationInput으로 simulate를 1회 호출한다", () => {

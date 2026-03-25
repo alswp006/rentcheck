@@ -110,10 +110,10 @@ vi.mock("@/lib/state/useAppState", () => ({
   }),
 }));
 
+import SettingsPage from "../pages/SettingsPage";
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function renderPage() {
-  vi.resetModules();
-  const { default: SettingsPage } = require("../pages/SettingsPage");
   return render(
     React.createElement(MemoryRouter, null, React.createElement(SettingsPage)),
   );

@@ -9,7 +9,7 @@ export interface AppState {
   loading: boolean;
   setEntitlement: (next: Entitlement) => Promise<void>;
   setSettings: (next: AppSettings) => Promise<void>;
-  getEffectiveEntitlement: (currentUserId: string) => Entitlement;
+  getEffectiveEntitlement: (currentUserId: string | null) => Entitlement;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -90,7 +90,7 @@ export function AppProvider({ storage, children }: AppProviderProps): React.Reac
   );
 
   const getEffectiveEntitlement = useCallback(
-    (currentUserId: string): Entitlement => {
+    (currentUserId: string | null): Entitlement => {
       if (entitlement.isPremium && entitlement.ownerUserId !== currentUserId) {
         return {
           ...entitlement,

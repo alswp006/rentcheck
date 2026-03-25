@@ -23,12 +23,17 @@ export default function HistoryPage() {
   const fetchHistory = async () => {
     setLoading(true);
     setError(false);
-    const result = await storageAdapter.listHistory({ page: 1, pageSize: 5 });
-    setLoading(false);
-    if (result.ok) {
-      setItems(result.data.items);
-    } else {
+    try {
+      const result = await storageAdapter.listHistory({ page: 1, pageSize: 5 });
+      if (result.ok) {
+        setItems(result.data.items);
+      } else {
+        setError(true);
+      }
+    } catch {
       setError(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -62,22 +67,31 @@ export default function HistoryPage() {
       </Top>
 
       {error && (
-        <div style={{ textAlign: "center", padding: 32 }}>
-          <p>불러오지 못했어요</p>
-          <Button onClick={fetchHistory}>다시 불러오기</Button>
-        </div>
+        <>
+          <Spacing size={32} />
+          <div style={{ textAlign: "center" }}>
+            <p>불러오지 못했어요</p>
+            <Button onClick={fetchHistory}>다시 불러오기</Button>
+          </div>
+          <Spacing size={32} />
+        </>
       )}
 
       {!error && !loading && items.length === 0 && (
-        <div style={{ textAlign: "center", padding: 32 }}>
-          <p>아직 기록이 없어요</p>
-          <Button onClick={() => navigate("/input")}>지금 비교하러 가기</Button>
-        </div>
+        <>
+          <Spacing size={32} />
+          <div style={{ textAlign: "center" }}>
+            <p>아직 기록이 없어요</p>
+            <Button onClick={() => navigate("/input")}>지금 비교하러 가기</Button>
+          </div>
+          <Spacing size={32} />
+        </>
       )}
 
       {!error && items.length > 0 && (
         <>
-          <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px" }}>
+          <Spacing size={8} />
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button onClick={() => setClearDialogOpen(true)}>전체 삭제</Button>
           </div>
           {items.map((entry) => (

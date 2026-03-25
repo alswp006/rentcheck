@@ -190,3 +190,6 @@ export const localStorageAdapter: StorageAdapter = {
     return removeKey(STORAGE_KEYS.history);
   },
 };
+
+// Alias for compatibility
+export const storageAdapter = localStorageAdapter;

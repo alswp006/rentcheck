@@ -69,6 +69,7 @@ describe("핵심 타입/계약 정의(types.ts)", () => {
 
     // SimulationResult shape
     const result: SimulationResult = {
+      id: "uuid-result-001",
       netWorthByYear: { jeonse: [0], monthly: [0], buy: [0] },
       finalNetWorth: { jeonse: 0, monthly: 0, buy: 0 },
       recommendedOption: "jeonse",

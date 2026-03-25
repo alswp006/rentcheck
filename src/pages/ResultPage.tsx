@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Chip, ListRow, Spacing, Top, Paragraph } from "@toss/tds-mobile";
+import { Button, Badge, ListRow, Spacing, Top, Paragraph } from "@toss/tds-mobile";
 import type { SimulationInput, OptionKey } from "@/lib/types";
 import { simulate } from "@/lib/simulation/simulate";
 import { formatCurrency } from "@/lib/utils";
@@ -93,7 +93,7 @@ export default function ResultPage(): JSX.Element {
               top={OPTION_LABELS[option]}
               bottom={`${years}년 후 순자산: ${formatCurrency(netWorth)}`}
             />
-            {isRecommended && <Chip label="추천" variant="filled" />}
+            {isRecommended && <Badge>추천</Badge>}
           </ListRow>
         );
       })}

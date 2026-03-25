@@ -112,6 +112,7 @@ vi.mock("@/lib/state/useAppState", () => ({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function renderPage() {
+  vi.resetModules();
   const { default: SettingsPage } = require("../pages/SettingsPage");
   return render(
     React.createElement(MemoryRouter, null, React.createElement(SettingsPage)),
@@ -121,7 +122,6 @@ function renderPage() {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 describe("설정 페이지(/settings): 고지 확인/데이터 초기화(범위 제한)", () => {
   beforeEach(() => {
-    vi.resetModules();
     mockNavigate.mockClear();
     mockClearHistory.mockClear();
     mockGetEffectiveEntitlement.mockReset();

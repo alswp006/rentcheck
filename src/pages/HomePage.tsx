@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Top, ListRow, Button, Dialog, Toast, Typography, Spacing } from "@toss/tds-mobile";
+import { Top, ListRow, Button, AlertDialog, Toast, Paragraph, Spacing } from "@toss/tds-mobile";
 import { useAppState } from "@/lib/state/useAppState";
 import { PRESET_SCENARIOS } from "@/lib/presets";
 import type { PresetScenario } from "@/lib/types";

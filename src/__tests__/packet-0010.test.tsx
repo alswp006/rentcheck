@@ -245,7 +245,7 @@ describe("설정 페이지(/settings): 고지 확인/데이터 초기화(범위 
     // Dialog should open with title "비교 방식 안내"
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toBeTruthy();
-    expect(screen.getByText("비교 방식 안내")).toBeTruthy();
+    expect(dialog.textContent).toContain("비교 방식 안내");
 
     // Description should include "N년 후 순자산"
     expect(dialog.textContent).toMatch(/\d+년 후 순자산|N년 후 순자산/);

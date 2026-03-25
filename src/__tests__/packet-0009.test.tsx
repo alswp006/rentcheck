@@ -275,7 +275,7 @@ describe("히스토리 페이지(/history): 최근 5개 조회/삭제/재실행"
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toBeTruthy();
     // Click confirm delete button in dialog
-    fireEvent.click(screen.getByText("삭제"));
+    fireEvent.click(within(dialog).getByText("삭제"));
     await waitFor(() => {
       expect(mockClearHistory).toHaveBeenCalledTimes(1);
     });

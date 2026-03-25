@@ -217,8 +217,7 @@ describe("localStorage keys + StorageAdapter 구현", () => {
     // Simulate QuotaExceededError by overriding setItem
     const original = Storage.prototype.setItem;
     Storage.prototype.setItem = () => {
-      const err = new DOMException("QuotaExceededError", "QuotaExceededError");
-      throw err;
+      throw new Error("QuotaExceededError");
     };
 
     try {

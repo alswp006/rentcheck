@@ -1,2 +1,4 @@
+🇺🇸 [한국어](./README.ko.md)
+
 # rentcheck
-전세·월세·매매, 10년 뒤 내 순자산이 가장 큰 선택지를 숫자로 알려주는 비교 시뮬레이터
+A comparative simulator that shows you in numbers which housing option (전세/monthly rent/purchase) will result in the largest net worth after 10 years

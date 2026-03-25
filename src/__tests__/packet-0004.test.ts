@@ -44,33 +44,30 @@ describe("프리셋/기본 입력 + 유틸(딥카피/uuid/라벨)", () => {
   it("AC-5a: createUuid uses crypto.randomUUID when available", async () => {
     const mockUUID = "12345678-1234-1234-1234-123456789abc";
     const originalCrypto = globalThis.crypto;
-    Object.defineProperty(globalThis, "crypto", {
-      value: { randomUUID: vi.fn().mockReturnValue(mockUUID) },
-      configurable: true,
-    });
-
-    const { createUuid } = await import("@/lib/utils/uuid");
-    const result = createUuid();
-    expect(result).toBe(mockUUID);
-
-    Object.defineProperty(globalThis, "crypto", { value: originalCrypto, configurable: true });
+    try {
+      Object.defineProperty(globalThis, "crypto", {
+        value: { randomUUID: vi.fn().mockReturnValue(mockUUID) },
+        configurable: true,
+      });
+      const { createUuid } = await import("@/lib/utils/uuid");
+      expect(createUuid()).toBe(mockUUID);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", { value: originalCrypto, configurable: true });
+    }
   });
 
   it("AC-5b: createUuid returns non-empty uuid-like string when crypto.randomUUID unavailable", async () => {
+    vi.resetModules();
     const originalCrypto = globalThis.crypto;
-    Object.defineProperty(globalThis, "crypto", {
-      value: {},
-      configurable: true,
-    });
-
-    // Re-import with cache bust not possible easily in vitest — test the fallback branch directly
-    const { createUuid } = await import("@/lib/utils/uuid");
-    const result = createUuid();
-    expect(result.length).toBeGreaterThan(0);
-    // uuid-like: contains hex chars and dashes
-    expect(result).toMatch(/[0-9a-f-]/);
-
-    Object.defineProperty(globalThis, "crypto", { value: originalCrypto, configurable: true });
+    try {
+      Object.defineProperty(globalThis, "crypto", { value: {}, configurable: true });
+      const { createUuid } = await import("@/lib/utils/uuid");
+      const result = createUuid();
+      expect(result.length).toBeGreaterThan(0);
+      expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", { value: originalCrypto, configurable: true });
+    }
   });
 
   // AC-6: deepClone — no shared nested references

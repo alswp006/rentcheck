@@ -18,9 +18,11 @@ const BENEFITS = [
   `거주기간 최대 ${PREMIUM_YEARS}년으로 확장`,
 ] as const;
 
+const LOGIN_NOTICE_ID = "premium-login-notice";
+
 export default function PremiumPage(): React.ReactElement {
   const navigate = useNavigate();
-  const { user } = useTossLogin();
+  const { user, login } = useTossLogin();
 
   const handlePayment = (): void => {
     // stub: 다음 패킷에서 결제 SDK 연결
@@ -29,25 +31,22 @@ export default function PremiumPage(): React.ReactElement {
   return (
     <>
       <Top>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label="뒤로"
+          style={{
+            background: "none",
+            border: "none",
+            padding: "12px 16px",
+            cursor: "pointer",
+            fontSize: "16px",
+          }}
+        >
+          ← 뒤로
+        </button>
         <Top.TitleParagraph>프리미엄</Top.TitleParagraph>
       </Top>
-
-      <Spacing />
-
-      <button
-        type="button"
-        onClick={() => navigate(-1)}
-        aria-label="뒤로"
-        style={{
-          background: "none",
-          border: "none",
-          padding: "12px 16px",
-          cursor: "pointer",
-          fontSize: "16px",
-        }}
-      >
-        ← 뒤로
-      </button>
 
       <Spacing />
 
@@ -90,7 +89,10 @@ export default function PremiumPage(): React.ReactElement {
 
       {/* 로그인 필요 안내 */}
       {user == null && (
-        <div style={{ padding: "0 16px", textAlign: "center" }}>
+        <div
+          id={LOGIN_NOTICE_ID}
+          style={{ padding: "0 16px", textAlign: "center" }}
+        >
           <Paragraph.Text typography="st8">
             로그인 후 결제할 수 있어요
           </Paragraph.Text>
@@ -110,7 +112,9 @@ export default function PremiumPage(): React.ReactElement {
           variant="fill"
           color="primary"
           size="large"
-          onClick={handlePayment}
+          onClick={user == null ? login : handlePayment}
+          aria-disabled={user == null}
+          aria-describedby={user == null ? LOGIN_NOTICE_ID : undefined}
         >
           프리미엄 결제
         </Button>

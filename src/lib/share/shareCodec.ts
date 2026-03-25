@@ -1,4 +1,5 @@
 import type { SimulationInput } from "@/lib/types";
+import { validateSimulationInput } from "@/lib/simulation/validation";
 
 interface SharePayloadV1 {
   version: 1;
@@ -15,7 +16,7 @@ export function encodeShareParamV1(input: SimulationInput): string {
     const json = JSON.stringify(payload);
     // Encode UTF-8 bytes via TextEncoder, then base64
     const bytes = new TextEncoder().encode(json);
-    return btoa(String.fromCharCode(...bytes));
+    return btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
   } catch {
     // Fallback: should never happen for valid SimulationInput
     return btoa(JSON.stringify({ version: 1, input: {} }));
@@ -52,8 +53,9 @@ export function decodeShareParam(s: string): DecodeResult {
     return { ok: false, code: "INVALID_INPUT", message: "입력 데이터가 손상되었어요" };
   }
 
-  const inputObj = payload.input as Record<string, unknown>;
-  if (typeof inputObj.jeonseDeposit !== "number") {
+  const candidateInput = payload.input as SimulationInput;
+  const validation = validateSimulationInput(candidateInput);
+  if (!validation.ok) {
     return { ok: false, code: "INVALID_INPUT", message: "입력 데이터가 손상되었어요" };
   }
 
@@ -61,7 +63,7 @@ export function decodeShareParam(s: string): DecodeResult {
     ok: true,
     data: {
       version: 1,
-      input: payload.input as SimulationInput,
+      input: candidateInput,
     },
   };
 }

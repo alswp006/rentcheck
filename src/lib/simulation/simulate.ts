@@ -135,8 +135,8 @@ function simulateBuy(input: SimulationInput): number[] {
     netWorthByYear.push(round(nw));
 
     if (y < residenceYears) {
-      // Annual mortgage payment (capped to actual remaining balance to avoid over-deduction)
-      const effectivePayment = loanBalance > 0 ? Math.min(annualPayment, loanBalance * (1 + buyLoanRate)) : 0;
+      // Annual mortgage payment (zero once loan is fully paid off)
+      const effectivePayment = loanBalance > 0 ? annualPayment : 0;
       liquid = liquid * (1 + investmentReturnRate) - effectivePayment;
     }
   }
@@ -213,10 +213,12 @@ export function simulate(input: SimulationInput): SimulateResult {
       },
       monthly: {
         rent: round(
-          input.monthlyRent *
-            12 *
-            ((Math.pow(1 + input.monthlyRentIncreaseRate, input.residenceYears) - 1) /
-              (input.monthlyRentIncreaseRate > 0 ? input.monthlyRentIncreaseRate : 1)),
+          input.monthlyRentIncreaseRate === 0
+            ? input.monthlyRent * 12 * input.residenceYears
+            : input.monthlyRent *
+                12 *
+                ((Math.pow(1 + input.monthlyRentIncreaseRate, input.residenceYears) - 1) /
+                  input.monthlyRentIncreaseRate),
         ),
         deposit: round(input.monthlyDeposit),
       },

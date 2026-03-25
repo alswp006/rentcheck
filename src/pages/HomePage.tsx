@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Top, ListRow, Button, AlertDialog, Toast, Paragraph, Spacing } from "@toss/tds-mobile";
+import { Top, ListRow, Button, Dialog, Toast, Typography, Spacing } from "@toss/tds-mobile";
 import { useAppState } from "@/lib/state/useAppState";
 import { PRESET_SCENARIOS } from "@/lib/presets";
 import type { PresetScenario } from "@/lib/types";
@@ -35,9 +35,7 @@ export default function HomePage(): React.ReactElement {
   if (loading) {
     return (
       <div>
-        <Top>
-          <Top.TitleParagraph>RentCheck</Top.TitleParagraph>
-        </Top>
+        <Top title="RentCheck" />
         <Paragraph.Text typography="st6">불러오는 중...</Paragraph.Text>
       </div>
     );
@@ -45,13 +43,14 @@ export default function HomePage(): React.ReactElement {
 
   return (
     <div>
-      <Top>
-        <Top.TitleParagraph>RentCheck</Top.TitleParagraph>
-      </Top>
+      <Top title="RentCheck" />
       {PRESET_SCENARIOS.map((preset) => (
-        <ListRow key={preset.id} padding="M" onClick={() => handlePresetClick(preset)}>
-          <ListRow.Text>{preset.name}</ListRow.Text>
-        </ListRow>
+        <ListRow
+          key={preset.id}
+          title={preset.name}
+          padding="M"
+          onClick={() => handlePresetClick(preset)}
+        />
       ))}
       <Spacing size={16} />
       <Button variant="weak" size="large" onClick={handleDirectInput}>

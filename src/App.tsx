@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import InputPage from './pages/InputPage';
 import ResultPage from './pages/ResultPage';
+import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import PremiumPage from './pages/PremiumPage';
 import { useTossLogin } from './hooks/useTossLogin';
@@ -23,7 +25,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/input" element={<InputPage />} />
       <Route path="/result" element={<ResultPage />} />
+      <Route path="/history" element={<HistoryPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/premium" element={<PrivateRoute><PremiumPage /></PrivateRoute>} />
     </Routes>

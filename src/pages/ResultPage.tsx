@@ -4,6 +4,7 @@ import { Button, Badge, ListRow, Spacing, Top, Paragraph } from "@toss/tds-mobil
 import type { SimulationInput, OptionKey } from "@/lib/types";
 import { simulate } from "@/lib/simulation/simulate";
 import { formatCurrency } from "@/lib/utils";
+import { PRESET_SCENARIOS, createSimulationInputFromPreset } from "@/lib/presets";
 import { AdSlot } from "@/components/AdSlot";
 
 const OPTION_LABELS: Record<OptionKey, string> = {
@@ -12,12 +13,29 @@ const OPTION_LABELS: Record<OptionKey, string> = {
   buy: "매매",
 };
 
+function resolveInput(
+  state: { input?: SimulationInput; presetId?: string } | null,
+): SimulationInput | null {
+  if (!state) return null;
+  if (state.input) return state.input;
+  if (state.presetId) {
+    const preset = PRESET_SCENARIOS.find((p) => p.id === state.presetId);
+    if (preset) return createSimulationInputFromPreset(preset);
+  }
+  return null;
+}
+
 export default function ResultPage(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const input =
-    (location.state as { input?: SimulationInput } | null)?.input ?? null;
+  const input = useMemo(
+    () =>
+      resolveInput(
+        location.state as { input?: SimulationInput; presetId?: string } | null,
+      ),
+    [location.state],
+  );
 
   const simResult = useMemo(() => {
     if (!input) return null;

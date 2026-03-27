@@ -1,9 +1,9 @@
 import { defineConfig } from '@apps-in-toss/web-framework/config';
 
 export default defineConfig({
-  appName: 'rentcheck',
+  appName: 'wisehome',
   brand: {
-    displayName: 'RentCheck — 전세·월세·매매 순자산 비교 시뮬레이터',
+    displayName: '현명한 주거 선택',
     primaryColor: '#3182F6',
     icon: '',
   },

@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { HistoryEntry, SimulationInput, PresetScenario } from '@/lib/types';
+import HomePage from '@/pages/HomePage';
 
 // ─── react-router-dom mock ────────────────────────────────────────────────────
 
@@ -171,7 +172,6 @@ function makeHistoryEntry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
 }
 
 function renderHomePage() {
-  const { default: HomePage } = require('@/pages/HomePage');
   return render(
     React.createElement(MemoryRouter, null, React.createElement(HomePage)),
   );
@@ -276,19 +276,15 @@ describe('[Page /] 홈: 프리셋 4개 선택 + 최근 히스토리 프리뷰 + 
   });
 
   it('AC-4: 로딩 종료 후 빈 상태로 전환된다', () => {
-    const { rerender } = (() => {
-      mockUseHistory.mockReturnValue({ loading: true, items: [], error: null });
-      const { default: HomePage } = require('@/pages/HomePage');
-      return render(
-        React.createElement(MemoryRouter, null, React.createElement(HomePage)),
-      );
-    })();
+    mockUseHistory.mockReturnValue({ loading: true, items: [], error: null });
+    const { rerender } = render(
+      React.createElement(MemoryRouter, null, React.createElement(HomePage)),
+    );
 
     expect(screen.getByText(/불러오고 있어요/)).toBeTruthy();
 
     // Simulate loading complete with no items
     mockUseHistory.mockReturnValue({ loading: false, items: [], error: null });
-    const { default: HomePage } = require('@/pages/HomePage');
     rerender(React.createElement(MemoryRouter, null, React.createElement(HomePage)));
 
     expect(screen.queryByText(/불러오고 있어요/)).toBeNull();

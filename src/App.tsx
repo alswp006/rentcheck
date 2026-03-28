@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import SimulatePage from './pages/SimulatePage';
 import ResultPage from './pages/ResultPage';
 import SharePage from './pages/SharePage';
+import HistoryPage from './pages/HistoryPage';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
       <Route path="/simulate" element={<SimulatePage />} />
       <Route path="/result" element={<ResultPage />} />
       <Route path="/share" element={<SharePage />} />
+      <Route path="/history" element={<HistoryPage />} />
     </Routes>
   );
 }

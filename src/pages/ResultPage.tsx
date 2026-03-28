@@ -13,11 +13,11 @@ import { generateHapticFeedback } from '@apps-in-toss/web-framework';
 import { validateResultState } from '@/lib/routing/guards';
 import { runSimulation } from '@/lib/simulation/engine';
 import { encodeSharePayloadV1 } from '@/lib/share';
-import { upsertHistory, type HistoryEntry } from '@/lib/storage/history';
+import { upsertHistory } from '@/lib/storage/history';
 import { useTossLogin } from '@/hooks/useTossLogin';
+import type { SimulationInput, HistoryEntry } from '@/lib/types';
 import { AdSlot } from '@/components/AdSlot';
 import { formatCurrency } from '@/lib/utils';
-import type { SimulationInput } from '@/lib/types';
 
 const OPTION_LABEL: Record<string, string> = {
   jeonse: '전세',
@@ -56,8 +56,11 @@ export function ResultPage() {
     const now = Date.now();
     const entry: HistoryEntry = {
       id: now.toString(16),
-      timestamp: now,
-      address: result.insightCopy.substring(0, 60),
+      createdAt: now,
+      updatedAt: now,
+      label: result.insightCopy.substring(0, 60),
+      input,
+      result,
     };
     const saveResult = upsertHistory(userId ?? 'guest', entry);
     if (!saveResult.ok) {

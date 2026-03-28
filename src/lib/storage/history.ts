@@ -1,12 +1,7 @@
+import type { HistoryEntry } from '@/lib/types';
+
 const HISTORY_KEY_PREFIX = 'history:';
 const MAX_HISTORY_ITEMS = 5;
-
-// Type for a history entry (from test expectations)
-export type HistoryEntry = {
-  id: string;
-  timestamp: number;
-  address: string;
-};
 
 type HistoryReadResult =
   | { ok: true; value: HistoryEntry[] }

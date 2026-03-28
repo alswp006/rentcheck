@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { HistoryEntry, SimulationInput } from "@/lib/types";
 import { readDraftInput, writeDraftInput } from "@/lib/storage/draft";
 import { readHistory, upsertHistory, deleteAllHistory } from "@/lib/storage/history";
 
@@ -12,6 +13,43 @@ import { readHistory, upsertHistory, deleteAllHistory } from "@/lib/storage/hist
  * - upsertHistory(tossUserId, entry) → maintains 5-item queue with FIFO eviction
  * - deleteAllHistory(tossUserId) → clears history
  */
+
+// Helper to create test HistoryEntry
+function makeTestEntry(id: string, timestamp: number): HistoryEntry {
+  const mockInput: SimulationInput = {
+    presetId: null,
+    jeonseDeposit: 300_000_000,
+    jeonseLoanRatio: 0.5,
+    jeonseInterestRate: 0.035,
+    monthlyDeposit: 50_000_000,
+    monthlyRent: 800_000,
+    monthlyRentIncreaseRate: 0.03,
+    buyPrice: 500_000_000,
+    buyEquity: 100_000_000,
+    buyLoanInterestRate: 0.04,
+    buyLoanPeriodYears: 30,
+    buyRepaymentType: "equal_payment",
+    initialAsset: 100_000_000,
+    residencePeriodYears: 5,
+    investmentReturnRate: 0.05,
+    housePriceGrowthRate: 0.03,
+  };
+
+  return {
+    id,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    label: `시나리오 ${id}`,
+    input: mockInput,
+    result: {
+      netWorthSeries: [],
+      finalNetWorth: { jeonse: 0, monthly: 0, buy: 0 },
+      recommendedOption: "jeonse",
+      insightCopy: "test insight",
+      costBreakdown: { jeonse: {}, monthly: {}, buy: {} },
+    },
+  };
+}
 
 describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   const TOSS_USER_ID = "test-user-12345";
@@ -140,11 +178,11 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // ============================================================================
   it("AC-6: upsertHistory(tossUserId, entry) maintains 5-item max with new entry at index 0", () => {
     const entries = [
-      { id: "h1", timestamp: 1000, address: "addr1" },
-      { id: "h2", timestamp: 2000, address: "addr2" },
-      { id: "h3", timestamp: 3000, address: "addr3" },
-      { id: "h4", timestamp: 4000, address: "addr4" },
-      { id: "h5", timestamp: 5000, address: "addr5" },
+      makeTestEntry("h1", 1000),
+      makeTestEntry("h2", 2000),
+      makeTestEntry("h3", 3000),
+      makeTestEntry("h4", 4000),
+      makeTestEntry("h5", 5000),
     ];
 
     // Write 5 entries
@@ -154,7 +192,7 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
     });
 
     // Now add a 6th entry (should evict oldest)
-    const newEntry = { id: "h6", timestamp: 6000, address: "addr6" };
+    const newEntry = makeTestEntry("h6", 6000);
     const upsertResult = upsertHistory(TOSS_USER_ID, newEntry);
     expect(upsertResult.ok).toBe(true);
 
@@ -191,7 +229,7 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
     // Corrupt the history storage
     localStorage.setItem(HISTORY_KEY, "{ bad json [");
 
-    const newEntry = { id: "h-new", timestamp: Date.now(), address: "test" };
+    const newEntry = { id: "h-new", timestamp: Date.now(), address: "test" } as unknown as import("@/lib/types").HistoryEntry;
 
     // Try to upsert — should fail at READ, not attempt WRITE
     const result = upsertHistory(TOSS_USER_ID, newEntry);
@@ -213,7 +251,7 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // ============================================================================
   it("AC-9: deleteAllHistory(tossUserId) removes storage, readHistory returns empty", () => {
     // Create some history first
-    const entry = { id: "h1", timestamp: 1000, address: "addr1" };
+    const entry = { id: "h1", timestamp: 1000, address: "addr1" } as unknown as import("@/lib/types").HistoryEntry;
     upsertHistory(TOSS_USER_ID, entry);
 
     // Verify it exists

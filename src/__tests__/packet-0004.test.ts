@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { AppTopBar } from "@/components/AppTopBar";
 
 // ── react-router-dom mock ──────────────────────────────────────────────────
 const mockNavigate = vi.fn();
@@ -95,8 +96,6 @@ vi.mock("@toss/tds-mobile", () => ({
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function renderAppTopBar(props: Record<string, unknown> = {}) {
-  // Dynamic import so we always get fresh module after mocks are set up
-  const { AppTopBar } = require("@/components/AppTopBar");
   return render(
     React.createElement(
       MemoryRouter,

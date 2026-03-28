@@ -64,9 +64,9 @@ describe("localStorage 저장소 헬퍼(History + UIState)", () => {
     const result = loadHistory();
 
     expect(result.ok).toBe(true);
-    expect(result.entries).toHaveLength(2);
-    expect(result.entries[0].input).toBe("valid-1");
-    expect(result.entries[1].input).toBe("valid-2");
+    expect(result.entries!).toHaveLength(2);
+    expect(result.entries![0].input).toBe("valid-1");
+    expect(result.entries![1].input).toBe("valid-2");
   });
 
   // ===== upsertHistory() tests =====
@@ -87,11 +87,11 @@ describe("localStorage 저장소 헬퍼(History + UIState)", () => {
     const result = upsertHistory("new-input", newISO);
 
     expect(result.ok).toBe(true);
-    expect(result.entries).toHaveLength(5); // exactly 5
-    expect(result.entries[0].input).toBe("new-input"); // newest at index 0
-    expect(result.entries[0].timestamp).toBe(newISO);
+    expect(result.entries!).toHaveLength(5); // exactly 5
+    expect(result.entries![0].input).toBe("new-input"); // newest at index 0
+    expect(result.entries![0].timestamp).toBe(newISO);
     // Verify the oldest was evicted
-    expect(result.entries.map((e) => e.input)).not.toContain("input-5");
+    expect(result.entries!.map((e: { input: string }) => e.input)).not.toContain("input-5");
   });
 
   it("AC-5: upsertHistory() handles QuotaExceededError and returns { ok:false, error:'QUOTA_EXCEEDED' }", async () => {
@@ -165,13 +165,13 @@ describe("localStorage 저장소 헬퍼(History + UIState)", () => {
     const { loadUiState } = await import("@/lib/storage");
 
     // Should not throw
-    let result;
+    let result: ReturnType<typeof loadUiState> | undefined;
     expect(() => {
       result = loadUiState();
     }).not.toThrow();
 
     // Should return { ok: false }
-    expect(result?.ok).toBe(false);
+    expect(result!.ok).toBe(false);
   });
 
   it("loadUiState() returns { ok:true, uiState } when valid JSON exists", async () => {

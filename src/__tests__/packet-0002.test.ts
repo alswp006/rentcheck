@@ -3,30 +3,31 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // ─── AC-1: Storage keys are string literals exported from keys.ts ───────────────
 
 describe('AC-1: Storage keys should be exported as string literals', () => {
-  it('should import STORAGE_KEY_HISTORY constant without errors', () => {
-    // This test will fail until src/lib/storage/keys.ts exists with STORAGE_KEY_HISTORY export
-    // Expected: import { STORAGE_KEY_HISTORY } from '@/lib/storage/keys'
-    // STORAGE_KEY_HISTORY === 'rentcheck:history:v1'
-    expect(() => {
-      // The test itself succeeds if the import path resolves
-      // Failure mode: Cannot find module '@/lib/storage/keys' or STORAGE_KEY_HISTORY not exported
-    }).not.toThrow();
+  it('should import STORAGE_KEY_HISTORY constant without errors', async () => {
+    try {
+      const keys = await import('@/lib/storage/keys');
+      expect(keys.STORAGE_KEY_HISTORY).toBeDefined();
+    } catch (e) {
+      throw new Error(`Module import failed: ${(e as Error).message}`);
+    }
   });
 
-  it('should import STORAGE_KEY_PURCHASE constant without errors', () => {
-    // Expected: import { STORAGE_KEY_PURCHASE } from '@/lib/storage/keys'
-    // STORAGE_KEY_PURCHASE === 'rentcheck:purchase:v1'
-    expect(() => {
-      // Failure mode: Cannot find module or STORAGE_KEY_PURCHASE not exported
-    }).not.toThrow();
+  it('should import STORAGE_KEY_PURCHASE constant without errors', async () => {
+    try {
+      const keys = await import('@/lib/storage/keys');
+      expect(keys.STORAGE_KEY_PURCHASE).toBeDefined();
+    } catch (e) {
+      throw new Error(`Module import failed: ${(e as Error).message}`);
+    }
   });
 
-  it('should import STORAGE_KEY_LAST_SHARE constant without errors', () => {
-    // Expected: import { STORAGE_KEY_LAST_SHARE } from '@/lib/storage/keys'
-    // STORAGE_KEY_LAST_SHARE === 'rentcheck:lastShare:v1'
-    expect(() => {
-      // Failure mode: Cannot find module or STORAGE_KEY_LAST_SHARE not exported
-    }).not.toThrow();
+  it('should import STORAGE_KEY_LAST_SHARE constant without errors', async () => {
+    try {
+      const keys = await import('@/lib/storage/keys');
+      expect(keys.STORAGE_KEY_LAST_SHARE).toBeDefined();
+    } catch (e) {
+      throw new Error(`Module import failed: ${(e as Error).message}`);
+    }
   });
 
   it('should have exact key strings matching spec', async () => {
@@ -37,8 +38,7 @@ describe('AC-1: Storage keys should be exported as string literals', () => {
       expect(keys.STORAGE_KEY_PURCHASE).toBe('rentcheck:purchase:v1');
       expect(keys.STORAGE_KEY_LAST_SHARE).toBe('rentcheck:lastShare:v1');
     } catch (e) {
-      // Module doesn't exist yet - test will fail until implementation
-      expect(true).toBe(false); // Fail intentionally to mark as RED
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 });
@@ -46,8 +46,10 @@ describe('AC-1: Storage keys should be exported as string literals', () => {
 // ─── AC-2: safeParseJson returns fallback on invalid JSON without throwing ──────
 
 describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -63,7 +65,7 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
 
       expect(result).toEqual(fallback);
     } catch (e) {
-      expect(true).toBe(false); // Fail: Module not found
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -76,7 +78,7 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
 
       expect(result).toEqual(fallback);
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -89,7 +91,7 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
 
       expect(result).toEqual(fallback);
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -104,7 +106,7 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
       expect(result).toEqual({ v: 1, entries: [{ id: 'test' }] });
       expect(result).not.toEqual(fallback);
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -117,21 +119,17 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
         safeParseJson('{ broken json', fallback);
       }).not.toThrow();
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
   it('should not call console.error when parsing fails', async () => {
     try {
       const { safeParseJson } = await import('@/lib/storage/json');
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       safeParseJson('invalid', {});
-
       expect(consoleErrorSpy).not.toHaveBeenCalled();
-      consoleErrorSpy.mockRestore();
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -153,7 +151,7 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
       expect(result.v).toBe(1);
       expect(result.value).toBe('test');
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 });
@@ -161,8 +159,10 @@ describe('AC-2: safeParseJson should handle invalid JSON gracefully', () => {
 // ─── AC-3: safeStringifyJson returns {ok: false} on failure without throwing ────
 
 describe('AC-3: safeStringifyJson should handle stringify failures gracefully', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -181,7 +181,7 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
         value: JSON.stringify(data),
       });
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -198,7 +198,7 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
       expect(result).toHaveProperty('ok', false);
       expect(result).toHaveProperty('error');
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -213,7 +213,7 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
         safeStringifyJson(circular);
       }).not.toThrow();
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -224,13 +224,10 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
       const circular: any = { v: 1 };
       circular.self = circular;
 
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       safeStringifyJson(circular);
-
       expect(consoleErrorSpy).not.toHaveBeenCalled();
-      consoleErrorSpy.mockRestore();
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -251,7 +248,7 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
         expect(JSON.parse(result.value)).toEqual(data);
       }
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -268,7 +265,7 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
       const boolResult = safeStringifyJson(true);
       expect(boolResult.ok).toBe(true);
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -291,7 +288,7 @@ describe('AC-3: safeStringifyJson should handle stringify failures gracefully', 
         expect(JSON.parse(result.value)).toEqual(nested);
       }
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 });
@@ -310,24 +307,13 @@ describe('AC-4: App should build and run after applying this packet', () => {
       expect(typeof json.safeParseJson).toBe('function');
       expect(typeof json.safeStringifyJson).toBe('function');
     } catch (e) {
-      expect(true).toBe(false); // Fail if imports fail
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
-  it('should allow TypeScript to resolve all types correctly', async () => {
-    try {
-      const { HistoryStorageV1, PurchaseStorageV1, LastShareStorageV1 } = await import(
-        '@/lib/types'
-      );
-
-      // If imports work, TS resolution succeeded
-      expect(HistoryStorageV1).toBeDefined();
-      expect(PurchaseStorageV1).toBeDefined();
-      expect(LastShareStorageV1).toBeDefined();
-    } catch (e) {
-      expect(true).toBe(false);
-    }
-  });
+  // TypeScript interfaces (HistoryStorageV1, PurchaseStorageV1, LastShareStorageV1) are
+  // type-only constructs erased at runtime — they cannot be tested via dynamic import.
+  it.todo('should allow TypeScript to resolve all types correctly');
 
   it('should work with the existing storage helper functions', async () => {
     try {
@@ -337,7 +323,7 @@ describe('AC-4: App should build and run after applying this packet', () => {
       expect(typeof setItem).toBe('function');
       expect(typeof removeItem).toBe('function');
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 });
@@ -368,7 +354,7 @@ describe('Integration: Storage keys with JSON utilities', () => {
       // Keys can be used to reference the storage location
       expect(keys.STORAGE_KEY_HISTORY).toBe('rentcheck:history:v1');
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -381,12 +367,11 @@ describe('Integration: Storage keys with JSON utilities', () => {
       const brokenJson = 'NOT VALID JSON AT ALL';
       const fallback = { v: 1, entries: [] };
 
+      expect(() => safeParseJson(brokenJson, fallback)).not.toThrow();
       const result = safeParseJson(brokenJson, fallback);
-
       expect(result).toEqual(fallback);
-      expect(result).not.toThrow;
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 
@@ -412,7 +397,7 @@ describe('Integration: Storage keys with JSON utilities', () => {
         expect(parseResult).toEqual(originalData);
       }
     } catch (e) {
-      expect(true).toBe(false);
+      throw new Error(`Module import failed: ${(e as Error).message}`);
     }
   });
 });

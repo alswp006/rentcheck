@@ -1,4 +1,5 @@
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Paragraph } from '@toss/tds-mobile';
 import { StorageSessionProvider } from '@/lib/state/StorageSessionContext';
 import HomePage from '@/pages/HomePage';
 import SimulatePage from '@/pages/SimulatePage';
@@ -57,7 +58,7 @@ function BottomTabBar() {
                 gap: '4px',
               }}
             >
-              <span style={{ fontSize: '12px' }}>{tab.label}</span>
+              <Paragraph.Text typography="st13">{tab.label}</Paragraph.Text>
             </button>
           );
         })}

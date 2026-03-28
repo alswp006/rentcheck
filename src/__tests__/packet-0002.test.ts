@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readDraftInput, writeDraftInput } from "@/lib/storage/draft";
+import { readHistory, upsertHistory, deleteAllHistory } from "@/lib/storage/history";
 
 /**
  * SC-1/SC-2 localStorage 헬퍼 구현(draft/history) — TDD RED Phase
@@ -30,8 +32,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-1: readDraftInput returns default when key missing
   // ============================================================================
   it("AC-1: readDraftInput(tossUserId) returns default value when key does not exist", () => {
-    // Import will happen when implementation exists
-    const { readDraftInput } = require("@/lib/storage/draft");
     const DEFAULT_INPUT = {
       location: "",
       roomCount: 1,
@@ -51,8 +51,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-2: Draft READ parse error returns error union, no throw
   // ============================================================================
   it("AC-2: readDraftInput returns error union on JSON.parse failure (corrupted storage)", () => {
-    const { readDraftInput } = require("@/lib/storage/draft");
-
     // Simulate corrupted JSON in localStorage
     localStorage.setItem(DRAFT_KEY, "{ invalid json");
 
@@ -71,8 +69,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-3: Draft WRITE stores value correctly (deep equality)
   // ============================================================================
   it("AC-3: writeDraftInput(tossUserId, input) successfully stores draft (primitive deep-equal)", () => {
-    const { writeDraftInput, readDraftInput } = require("@/lib/storage/draft");
-
     const testInput = {
       location: "서울시 강남구",
       roomCount: 2,
@@ -99,14 +95,17 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-4: Draft WRITE quota exceeded error, storage not corrupted
   // ============================================================================
   it("AC-4: writeDraftInput returns error on QuotaExceededError, storage unchanged", () => {
-    const { writeDraftInput } = require("@/lib/storage/draft");
-
     const testInput = {
-      location: "x".repeat(100000), // Large object to trigger quota
+      location: "test",
       roomCount: 1,
       priceMin: 0,
       priceMax: 999999999,
     };
+
+    // Mock setItem to throw QuotaExceededError
+    vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("QuotaExceededError", "QuotaExceededError");
+    });
 
     // Capture pre-write state
     const preWriteValue = localStorage.getItem(DRAFT_KEY);
@@ -128,8 +127,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-5: readHistory returns empty array when key missing
   // ============================================================================
   it("AC-5: readHistory(tossUserId) returns { ok: true, value: [] } when key does not exist", () => {
-    const { readHistory } = require("@/lib/storage/history");
-
     const result = readHistory(TOSS_USER_ID);
 
     expect(result).toEqual({
@@ -142,8 +139,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-6: History UPSERT maintains 5-item limit, new at index 0, FIFO eviction
   // ============================================================================
   it("AC-6: upsertHistory(tossUserId, entry) maintains 5-item max with new entry at index 0", () => {
-    const { readHistory, upsertHistory } = require("@/lib/storage/history");
-
     const entries = [
       { id: "h1", timestamp: 1000, address: "addr1" },
       { id: "h2", timestamp: 2000, address: "addr2" },
@@ -163,20 +158,19 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
     const upsertResult = upsertHistory(TOSS_USER_ID, newEntry);
     expect(upsertResult.ok).toBe(true);
 
-    // Verify state
+    // Verify state: [h6,h5,h4,h3,h2] — h1 dropped (oldest)
     const readResult = readHistory(TOSS_USER_ID);
     expect(readResult.ok).toBe(true);
+    if (!readResult.ok) return;
     expect(readResult.value).toHaveLength(5);
     expect(readResult.value[0]).toEqual(newEntry); // New at index 0
-    expect(readResult.value[4]).toEqual(entries[3]); // Last removed, h5 dropped
+    expect(readResult.value[4]).toEqual(entries[1]); // h1 dropped (oldest)
   });
 
   // ============================================================================
   // AC-7: History READ parse error returns error union, no throw
   // ============================================================================
   it("AC-7: readHistory returns error union on JSON.parse failure (corrupted storage)", () => {
-    const { readHistory } = require("@/lib/storage/history");
-
     // Simulate corrupted JSON
     localStorage.setItem(HISTORY_KEY, "[ invalid json");
 
@@ -194,8 +188,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-8: History UPSERT doesn't write if READ fails (no corruption overwrite)
   // ============================================================================
   it("AC-8: upsertHistory returns READ error without calling setItem when READ fails", () => {
-    const { upsertHistory } = require("@/lib/storage/history");
-
     // Corrupt the history storage
     localStorage.setItem(HISTORY_KEY, "{ bad json [");
 
@@ -220,15 +212,14 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // AC-9: deleteAllHistory clears history storage
   // ============================================================================
   it("AC-9: deleteAllHistory(tossUserId) removes storage, readHistory returns empty", () => {
-    const { readHistory, upsertHistory, deleteAllHistory } =
-      require("@/lib/storage/history");
-
     // Create some history first
     const entry = { id: "h1", timestamp: 1000, address: "addr1" };
     upsertHistory(TOSS_USER_ID, entry);
 
     // Verify it exists
     let result = readHistory(TOSS_USER_ID);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
     expect(result.value).toHaveLength(1);
 
     // Delete
@@ -250,8 +241,6 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // Integration: Multiple tossUserIds are isolated (scoped by key)
   // ============================================================================
   it("Multiple tossUserIds maintain isolated storage (keys scoped)", () => {
-    const { readDraftInput, writeDraftInput } = require("@/lib/storage/draft");
-
     const user1 = "user-1";
     const user2 = "user-2";
 
@@ -275,6 +264,11 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
     const result1 = readDraftInput(user1);
     const result2 = readDraftInput(user2);
 
+    expect(result1.ok).toBe(true);
+    if (!result1.ok) return;
+    expect(result2.ok).toBe(true);
+    if (!result2.ok) return;
+
     expect(result1.value).toEqual(input1);
     expect(result2.value).toEqual(input2);
   });
@@ -283,14 +277,16 @@ describe("SC-1/SC-2 localStorage 헬퍼 구현(draft/history)", () => {
   // Error type validation: ensure error codes are specific
   // ============================================================================
   it("Error codes are specific and distinguishable", () => {
-    const { readDraftInput } = require("@/lib/storage/draft");
-    const { readHistory } = require("@/lib/storage/history");
-
     localStorage.setItem(`draft:${TOSS_USER_ID}`, "bad json");
     localStorage.setItem(`history:${TOSS_USER_ID}`, "bad json");
 
     const draftErr = readDraftInput(TOSS_USER_ID);
     const historyErr = readHistory(TOSS_USER_ID);
+
+    expect(draftErr.ok).toBe(false);
+    if (draftErr.ok) return;
+    expect(historyErr.ok).toBe(false);
+    if (historyErr.ok) return;
 
     expect(draftErr.errorCode).toBe("STORAGE_PARSE_ERROR");
     expect(historyErr.errorCode).toBe("STORAGE_PARSE_ERROR");

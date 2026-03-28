@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import HomePage from '../pages/HomePage';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -11,17 +12,16 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-const mockGenerateHapticFeedback = vi.fn();
-vi.mock('@apps-in-toss/framework', () => ({
-  generateHapticFeedback: mockGenerateHapticFeedback,
-}));
+// Import and spy on the mock (vitest.config.ts aliases @apps-in-toss/web-framework to the mock file)
+import * as AppsTossModule from '@apps-in-toss/web-framework';
+const mockGenerateHapticFeedback = vi.spyOn(AppsTossModule, 'generateHapticFeedback');
 
 vi.mock('@toss/tds-mobile', () => ({
   Button: ({ children, onClick, ...props }: any) =>
     React.createElement('button', { onClick, ...props }, children),
   ListRow: Object.assign(
-    ({ children, onClick, ...props }: any) =>
-      React.createElement('div', { onClick, role: 'button', ...props }, children),
+    ({ contents, onClick, ...props }: any) =>
+      React.createElement('div', { onClick, role: 'button', ...props }, contents),
     {
       Text: ({ children }: any) => React.createElement('span', null, children),
       Texts: ({ top, bottom }: any) =>
@@ -48,8 +48,6 @@ vi.mock('@toss/tds-mobile', () => ({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function renderHomePage() {
-  // Dynamic import to allow the mock to apply; use lazy require pattern
-  const { default: HomePage } = require('@/pages/HomePage');
   return render(
     React.createElement(MemoryRouter, { initialEntries: ['/'] },
       React.createElement(HomePage),

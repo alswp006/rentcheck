@@ -1,10 +1,12 @@
 import { Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
+import HomePage from './pages/HomePage';
+import SimulatePage from './pages/SimulatePage';
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/simulate" element={<SimulatePage />} />
     </Routes>
   );
 }

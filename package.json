@@ -15,8 +15,8 @@
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^7.5.0",
-    "@toss/tds-mobile": "latest",
-    "@apps-in-toss/web-framework": "latest",
+    "@toss/tds-mobile": "2.3.0",
+    "@apps-in-toss/web-framework": "2.1.1",
     "@emotion/react": "^11.0.0",
     "@emotion/styled": "^11.0.0",
     "lucide-react": "^0.511.0"

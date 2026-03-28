@@ -1,0 +1,457 @@
+[
+  {
+    "id": "0001",
+    "title": "도메인/스토리지/공유/RouteState 타입 정의",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "스펙에 등장하는 모든 엔티티 타입과 localStorage 스키마, 공유 payload, 결과 모델, RouteState 계약을 src/lib/types.ts에 순수 타입으로만 선언해요. 런타임 코드 없이 export만 제공하고, 이후 모든 페이지/유틸이 이 타입을 단일 소스로 참조하게 만들어요.",
+      "acceptance_criteria": [
+        "tsc 컴파일 시 src/lib/types.ts 관련 타입 에러가 0개다 (Pass: `pnpm tsc` 성공 / Fail: 타입 에러 발생)",
+        "src/lib/types.ts에서 다음이 export 된다: PresetScenario, SimulationInput, BuyRepaymentType, SimulationResultCore, SimulationResult, NetWorthPoint, CostBreakdownRow, RecommendedOption, HistoryEntry, HistoryStorageV1, PurchaseStorageV1, LastShareStorageV1, SharePayload, CreateShareUrlError, RouteState, OptionKey, OptionFeasibility (Pass: 각 심볼 import 가능 / Fail: 누락)",
+        "RouteState가 최소 다음 키를 포함한다: '/result'({ input: SimulationInput; source:'preset'|'manual'|'history'|'share' }), '/input'({ prefill?: Partial<SimulationInput> }|undefined), '/purchase'({ from?: 'result'|'home' }|undefined) (Pass: 타입 키 존재 / Fail: 키 또는 필드 누락)",
+        "SimulationInput에 공통 필드(예: initialAsset, residenceYears, investmentReturnRate, housePriceGrowthRate)와 옵션별 필드(전세/월세/매매)가 분리되어 표현된다 (Pass: 타입에 명시적 프로퍼티 존재 / Fail: any/Record로 뭉개짐)"
+      ]
+    },
+    "covers": [
+      "AC-S1-2",
+      "AC-S1-4",
+      "AC-S2-1",
+      "AC-S2-6",
+      "AC-S3-6",
+      "AC-S4-4",
+      "AC-S5-4",
+      "AC-S5-5",
+      "AC-S6-1"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "런타임 로직 0줄(타입/인터페이스/유니온만)",
+      "any 사용 0회(불가피 시 unknown 후 좁히기, 단 이 파일은 타입만)",
+      "export 누락 없음(상위 패킷에서 재사용 가능)"
+    ],
+    "depends_on": [],
+    "db_schema": "data_model: PresetScenario/SimulationInput/SimulationResult/HistoryEntry/SharePayload 등 TS interface + localStorage key들은 이후 storage 패킷에서 상수로 매핑",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "localStorage 키/안전 JSON 유틸(파싱 실패 no-op)",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "storage 레이어 공통 기반을 만들어요. key 문자열을 한 곳에서 고정하고, JSON parse/stringify 실패 시 throw/console.error 없이 기본값으로 복구하는 헬퍼를 제공해요. 이후 모든 storage CRUD는 이 유틸만 사용하게 해 merge 충돌과 런타임 크래시를 줄여요.",
+      "acceptance_criteria": [
+        "src/lib/storage/keys.ts에 스펙 키가 string literal로 export 된다 (Pass: 다른 파일에서 import 가능 / Fail: 하드코딩 중복 발생)",
+        "src/lib/storage/json.ts의 safeParseJson<T>(raw, fallback)가 invalid JSON 입력 시 fallback을 반환하고 예외를 던지지 않는다 (Pass: try/catch 없이도 호출부 크래시 0 / Fail: throw 발생)",
+        "safeStringifyJson(value) 호출이 순환참조 등으로 실패해도 예외를 던지지 않고 { ok:false } 형태로 결과를 반환한다 (Pass: 실패를 반환값으로 처리 / Fail: throw)",
+        "이 패킷 적용 후 앱이 빌드/실행 가능하다 (Pass: dev server 정상 / Fail: import 경로 오류)"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/lib/storage/keys.ts",
+      "src/lib/storage/json.ts"
+    ],
+    "definition_of_done": [
+      "console.error 호출 추가 0건",
+      "Android 7/iOS16에서 동작 불명 API 사용 0건",
+      "모든 export는 named export로 제공(트리셰이킹 유리)"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "data_model: localStorage keys - 'rentcheck:history:v1', 'rentcheck:purchase:v1', 'rentcheck:lastShare:v1', 'rentcheck:metrics:v1'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "Purchase/LastShare/History/Metrics storage CRUD + eviction(최대 5개)",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "localStorage에 저장되는 4종 엔티티 CRUD를 구현해요. 구매 상태(purchase), 최근 공유(lastShare), 히스토리(history, 최대 5개 eviction), 시뮬레이션 실행 카운터(metrics)를 안전 JSON 유틸로 읽고/쓰며, 파싱 실패·저장 실패는 no-op으로 처리해 UI 크래시를 막아요.",
+      "acceptance_criteria": [
+        "upsertHistoryEntry(entry) 호출 직후 반환된 entries.length가 5 이하다 (Pass: 6번째 저장 시 5개 유지 / Fail: 6개 이상)",
+        "history eviction은 createdAt 오름차순 기준으로 가장 오래된 항목부터 제거한다 (Pass: 오래된 항목이 먼저 삭제 / Fail: 최신이 삭제)",
+        "getPurchaseStorage()/setPurchaseStorage()가 'rentcheck:purchase:v1'에 PurchaseStorageV1 형태로 저장/조회한다 (Pass: 새로고침 후 값 유지 / Fail: 초기화됨)",
+        "incrementSimulateCount() 호출 시 'rentcheck:metrics:v1'가 { v:1, simulateCount:number, updatedAt:number } 형태로 저장되며 실패 시 throw 하지 않는다 (Pass: 예외 0 / Fail: throw)",
+        "setLastShareStorage() 호출 후 getLastShareStorage()가 updatedAt 타임스탬프를 반환한다 (Pass: timestamp 존재 / Fail: 누락)"
+      ]
+    },
+    "covers": [
+      "AC-S3-3",
+      "AC-S4-4",
+      "AC-S6-1"
+    ],
+    "files": [
+      "src/lib/storage/purchase.ts",
+      "src/lib/storage/lastShare.ts",
+      "src/lib/storage/history.ts",
+      "src/lib/metrics.ts"
+    ],
+    "definition_of_done": [
+      "모든 storage 함수는 예외를 던지지 않는다(throw 0)",
+      "localStorage 키는 keys.ts만 사용(문자열 하드코딩 0)",
+      "엔트리 총합 5MB 제한을 넘기지 않도록 history max 5 고정"
+    ],
+    "depends_on": [
+      "0002",
+      "0001"
+    ],
+    "db_schema": "data_model: HistoryEntry[] → key 'rentcheck:history:v1' (max 5). PurchaseStorageV1 → 'rentcheck:purchase:v1'. LastShareStorageV1 → 'rentcheck:lastShare:v1'. MetricsV1 → 'rentcheck:metrics:v1'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "검증/시뮬레이션/공유 유틸 + Purchase/History Context",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "입력 검증(authoritative constraints + 옵션별 초기자산 feasibility), 순수 계산 함수 simulate(input)→result, 공유 인코드/디코드(Base64url, 길이 제한), 그리고 구매/히스토리 상태를 페이지에서 재사용할 수 있게 Context+hooks로 제공해요. 모든 실패는 UI에서 처리 가능하게 반환값 기반으로 만들어요.",
+      "acceptance_criteria": [
+        "validateSimulationInput(input) 결과에 residenceYears가 1~30 범위를 벗어나면 오류 코드/메시지가 포함된다 (Pass: 0 또는 31에서 에러 / Fail: 통과)",
+        "validateSimulationInput(input)에서 buyEquity > buyPrice이면 '자기자본은 매매가를 넘을 수 없어요' 메시지가 포함된다 (Pass: 정확 문구 / Fail: 다른 문구 또는 누락)",
+        "옵션 feasibility가 3개 모두 false면 validate 결과에 'allOptionsInfeasible=true'가 포함된다 (Pass: 3옵션 초기자산 부족 시 true / Fail: false)",
+        "simulate(input)은 동일 input에 대해 동일한 SimulationResult를 반환하는 순수 함수다 (Pass: 랜덤/Date 의존 0 / Fail: 호출마다 달라짐)",
+        "createShareUrl({v:1,input})가 ok:true인 경우 반환 url에 '/share?p='가 포함된다 (Pass: 내부 라우트 형태 / Fail: 외부 도메인)",
+        "decodeShareParam(p)에서 invalid/too long 입력은 ok:false와 명시적 에러 코드를 반환하고 throw 하지 않는다 (Pass: 예외 0 / Fail: throw)",
+        "PurchaseContext 훅에서 setAdSkipPurchased(true) 호출 후 새로고침 없이도 isAdSkipPurchased가 true로 반영된다 (Pass: 즉시 UI 반영 가능 / Fail: 반영 안 됨)"
+      ]
+    },
+    "covers": [
+      "AC-S2-2",
+      "AC-S2-3",
+      "AC-S3-7",
+      "AC-S5-4",
+      "AC-S5-5"
+    ],
+    "files": [
+      "src/lib/validation.ts",
+      "src/lib/simulate.ts",
+      "src/lib/share.ts",
+      "src/state/PurchaseContext.tsx",
+      "src/state/HistoryContext.tsx"
+    ],
+    "definition_of_done": [
+      "console.error 추가 0건(실패는 Result/Toast로 표현 가능)",
+      "share 유틸은 window.open/location.href 사용 0건",
+      "Context는 localStorage CRUD를 내부에서만 사용하고 외부에는 hook API만 노출"
+    ],
+    "depends_on": [
+      "0003",
+      "0002",
+      "0001"
+    ],
+    "db_schema": "data_model: SharePayload(v:1,input) ↔ query param p(base64url). Purchase/History는 Context로 읽고 갱신",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "S1 홈 페이지 + 프리셋 상수(presets)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "홈(/)에서 프리셋 4종을 ListRow로 고정 렌더링하고, 유효한 프리셋 탭 시 /result로 state({source:'preset',input})를 전달해요. id 형식 불일치 시 Toast로 고정 문구를 보여주고 이동하지 않아요. “직접 입력하기”는 /input으로 state 없이 이동해요.",
+      "acceptance_criteria": [
+        "/ 진입 시 ListRow 프리셋 항목이 정확히 4개 렌더링된다 (Pass: 4개 / Fail: 3개 이하 또는 5개 이상)",
+        "정규식 ^preset-(1|2|3|4)$ 를 만족하는 프리셋 탭 시 /result로 navigate하며 state에 { source:'preset', input }가 존재한다 (Pass: state 확인 / Fail: 이동 없음 또는 state 누락)",
+        "정규식 불일치 id의 프리셋 탭 시 Toast '프리셋 데이터를 불러올 수 없어요'가 표시되고 /result로 navigate하지 않는다 (Pass: 토스트+이동없음 / Fail: 결과로 이동)",
+        "'직접 입력하기' 버튼 탭 시 /input으로 navigate하고 navigation state는 undefined다 (Pass: state undefined / Fail: state 존재)",
+        "화면 이동 경로에서 window.open/window.location.href 호출 코드가 없다 (Pass: 소스 검색 0 / Fail: 호출 존재)"
+      ]
+    },
+    "covers": [
+      "AC-S1-1",
+      "AC-S1-2",
+      "AC-S1-3",
+      "AC-S1-4",
+      "AC-S1-5"
+    ],
+    "files": [
+      "src/pages/HomePage.tsx",
+      "src/lib/presets.ts"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트만 사용(AppBar/Typography/ListRow/Button/Spacing/Toast)",
+      "프리셋 탭 성공 시 tickWeak, 직접 입력하기 성공 시 success 햅틱 호출",
+      "페이지 패딩은 TDS 기본/Spacing만 사용(커스텀 여백 덮어쓰기 0)"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "data_model: PresetScenario(id, title, subTitle, defaults:SimulationInput) → 로컬 상수(스토리지 저장 없음)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 홈(프리셋 선택) (`/`)\n\n### Layout\n```tsx\n<AppBar title=\"조건을 골라요\" />\n<Spacing size={16} />\n\n<Typography variant=\"heading2\">빠르게 시작해요</Typography>\n<Spacing size={12} />\n\n<ListRow title=\"프리셋 1\" subTitle=\"기본 조건으로 비교해요\" padding=\"L\" onClick={onTapPreset1} />\n<ListRow title=\"프리셋 2\" subTitle=\"보수적으로 비교해요\" padding=\"L\" onClick={onTapPreset2} />\n<ListRow title=\"프리셋 3\" subTitle=\"공격적으로 비교해요\" padding=\"L\" onClick={onTapPreset3} />\n<ListRow title=\"프리셋 4\" subTitle=\"장기 거주로 비교해요\" padding=\"L\" onClick={onTapPreset4} />\n\n<Spacing size={24} />\n<div style={{ backgroundColor: 'var(--tds-color-grey50)', borderRadius: 16, padding: 20 }}>\n  <Typography variant=\"caption1\" color=\"secondary\">원하는 조건이 없나요?</Typography>\n  <Spacing size={8} />\n  <Typography variant=\"body1\">직접 입력해서 비교할 수 있어요</Typography>\n  <Spacing size={12} />\n  <Button variant=\"primary\" size=\"large\" onClick={onGoInput}>직접 입력하기</Button>\n</div>\n```\n\n### States\n- Loading: 없음(로컬 상수)\n- Empty: 없음(프리셋 4개 고정)\n- Error: 없음(단, 잘못된 프리셋 탭 시 `Toast message=\"프리셋 데이터를 불러올 수 없어요\"`)\n\n### Interactions\n- 프리셋 `ListRow` 탭 → 유효하면 `/result`로 이동(state `{ source:'preset', input }`) + 햅틱 `tickWeak`\n- 프리셋 id 불일치 탭 → `Toast` 표시 + 이동 없음 + 햅틱 없음\n- “직접 입력하기” 탭 → `/input` 이동(state `undefined`) + 햅틱 `success`\n- 화면 이동 시 `window.open`, `window.location.href` 호출 금지"
+  },
+  {
+    "id": "0006",
+    "title": "S2 입력 페이지(3탭+검증+슬라이더+키보드 스크롤)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/input에서 TabBar로 전세/월세/매매 입력을 전환하고 공통 설정을 함께 입력받아요. prefill을 초기값으로 반영하고, 필드 단위 오류 메시지로 authoritative validation을 수행해 제출을 차단해요. 집값상승률/수익률은 range 슬라이더로 빠르게 조정하며, 포커스 시 scrollIntoView로 키보드에 가리지 않게 해요.",
+      "acceptance_criteria": [
+        "/input 진입 시 state.prefill에 { residenceYears:5, initialAsset:30000000 }가 있으면 초기 렌더에서 해당 필드 값이 각각 5, 30000000으로 표시된다 (Pass: 초기값 반영 / Fail: 기본값 유지)",
+        "monthlyRent TextField 내부 input에 inputMode='numeric'가 설정된다 (Pass: DOM 속성 확인 / Fail: 누락)",
+        "TextField onFocus 시 해당 행 컨테이너가 scrollIntoView({block:'center'})를 300ms 내 호출한다 (Pass: 호출 발생 / Fail: 호출 없음)",
+        "housePriceGrowthRate 슬라이더로 <input type='range' data-testid='housePriceGrowthRate-slider'>가 존재하고 값 변경 시 동일 섹션 Typography에 'N%'가 즉시 표시된다 (Pass: 즉시 반영 / Fail: 미반영)",
+        "investmentReturnRate 슬라이더로 <input type='range' data-testid='investmentReturnRate-slider'>가 존재하고 값 변경 시 동일 섹션 Typography에 'N%'가 즉시 표시된다 (Pass: 즉시 반영 / Fail: 미반영)",
+        "buyEquity > buyPrice 입력 시 '자기자본은 매매가를 넘을 수 없어요'가 표시되고 '결과 보기' 버튼이 disabled다 (Pass: 에러+disabled / Fail: enabled 또는 에러 없음)",
+        "residenceYears에 0 또는 31 이상 입력 시 '거주기간은 1~30년만 입력할 수 있어요'가 표시되고 /result로 navigate하지 않는다 (Pass: 이동 없음 / Fail: 이동)",
+        "전세 금리 35 입력 시 '금리는 0~30%만 입력할 수 있어요'가 표시되고 제출이 차단된다 (Pass: 에러 / Fail: 통과)",
+        "initialAsset에 '12,000,000원' 붙여넣기 후 제출 시 '숫자만 입력해주세요'가 표시되고 navigate하지 않는다 (Pass: 이동 없음 / Fail: 이동)",
+        "3옵션 모두 초기자산 부족이면 '결과 보기' 버튼이 disabled다 (Pass: disabled / Fail: enabled)",
+        "모든 제약을 만족하고 1옵션 이상 feasible일 때 '결과 보기' 탭 시 /result로 navigate하며 state에 { source:'manual', input }가 포함된다 (Pass: state 포함 / Fail: 이동 없음/누락)"
+      ]
+    },
+    "covers": [
+      "AC-S2-1",
+      "AC-S2-2",
+      "AC-S2-3",
+      "AC-S2-4",
+      "AC-S2-5",
+      "AC-S2-6"
+    ],
+    "files": [
+      "src/pages/InputPage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트(AppBar/TabBar/TextField/Button/Typography/Spacing/Dialog/Toast)만 사용",
+      "하단 고정 CTA는 safe-area-inset-bottom 포함",
+      "검증 실패 시 버튼 disabled 유지(제출 클릭으로 라우팅 발생 0)"
+    ],
+    "depends_on": [
+      "0004",
+      "0001"
+    ],
+    "db_schema": "data_model: RouteState['/input'] prefill → 폼 초기값. 제출 시 RouteState['/result']로 SimulationInput 전달",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 입력(3탭 + 공통 설정) (`/input`)\n\n### Layout\n```tsx\n<AppBar title=\"조건을 입력해요\" backButton />\n<Spacing size={12} />\n\n<TabBar\n  items={[\n    { label: \"전세\", path: \"/input?tab=jeonse\" },\n    { label: \"월세\", path: \"/input?tab=rent\" },\n    { label: \"매매\", path: \"/input?tab=buy\" },\n  ]}\n  activeIndex={activeTabIndex}\n/>\n\n<Spacing size={16} />\n<Typography variant=\"heading3\">공통 설정</Typography>\n<Spacing size={12} />\n<TextField label=\"초기자산\" value={initialAsset} onChange={setInitialAsset} error={initialAssetError} type=\"number\" />\n<Spacing size={12} />\n<TextField label=\"거주기간(년)\" value={residenceYears} onChange={setResidenceYears} error={residenceYearsError} type=\"number\" />\n<Spacing size={12} />\n<TextField label=\"연 수익률(%)\" value={investReturnRate} onChange={setInvestReturnRate} error={investReturnRateError} type=\"number\" />\n<Spacing size={12} />\n<TextField label=\"집값 상승률(%)\" value={homeGrowthRate} onChange={setHomeGrowthRate} error={homeGrowthRateError} type=\"number\" />\n\n<Spacing size={24} />\n<Typography variant=\"heading3\">{activeTabLabel} 조건</Typography>\n<Spacing size={12} />\n{activeTab === \"jeonse\" && (\n  <TextField label=\"전세 보증금\" value={jeonseDeposit} onChange={setJeonseDeposit} error={jeonseDepositError} type=\"number\" />\n)}\n{activeTab === \"rent\" && (\n  <>\n    <TextField label=\"월세 보증금\" value={rentDeposit} onChange={setRentDeposit} error={rentDepositError} type=\"number\" />\n    <Spacing size={12} />\n    <TextField label=\"월세(월)\" value={monthlyRent} onChange={setMonthlyRent} error={monthlyRentError} type=\"number\" />\n  </>\n)}\n{activeTab === \"buy\" && (\n  <>\n    <TextField label=\"매매가\" value={buyPrice} onChange={setBuyPrice} error={buyPriceError} type=\"number\" />\n    <Spacing size={12} />\n    <TextField label=\"자기자본\" value={buyEquity} onChange={setBuyEquity} error={buyEquityError} type=\"number\" />\n  </>\n)}\n\n<div style={{ position: \"fixed\", bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: \"calc(16px + env(safe-area-inset-bottom))\", backgroundColor: \"var(--tds-color-background)\" }}>\n  <Button variant=\"primary\" size=\"large\" disabled={!canSubmit} onClick={onSubmit}>결과 보기</Button>\n</div>\n```\n\n### States\n- Loading: 없음  \n- Empty: `prefill`이 없으면 기본값으로 초기화(필드 값이 기본값으로 표시)\n- Error:\n  - 필드 단위: `TextField error=\"...\"`로 고정 문구 표시\n  - 제출 불가: `Button disabled={true}` 유지\n  - 예) `buyEquity > buyPrice`면 `\"자기자본은 매매가를 넘을 수 없어요\"` 표시\n\n### Interactions\n- 탭 전환(TabBar) → 해당 탭 폼 렌더 + 햅틱 `tickWeak`\n- 숫자 입력 필드 포커스 시: 구현에서 내부 input에 `inputMode=\"numeric\"`(또는 소수 필요 시 `\"decimal\"`) 설정 + 해당 필드 컨테이너 `scrollIntoView({ block:'center' })`\n- “결과 보기” 탭(가능 상태) → `/result`로 이동(state `{ source:'manual', input }`) + 햅틱 `success`\n- 제출 불가 상태에서 버튼 탭 → 동작 없음(네비게이션 없음)"
+  },
+  {
+    "id": "0007",
+    "title": "S3 결과 UI(카드/차트/비용표/공유/히스토리 저장) 컴포넌트화",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/result에서 route state 검증과 입력 재검증을 수행하고, 가능 옵션이 1개 이상이면 결과 카드/차트/비용표/공유 섹션을 렌더링해요. 3옵션 모두 초기자산 부족이면 고정 에러 화면을 보여줘요. 공유는 Web Share 우선, 폴백은 클립보드+Toast로 처리하고, 결과는 히스토리에 저장해요(최대 5개).",
+      "acceptance_criteria": [
+        "/result 진입 시 route state에 input이 없으면 Typography '잘못된 접근입니다'만 표시되고 카드/차트/표가 렌더링되지 않는다 (Pass: 결과 미노출 / Fail: 일부라도 노출)",
+        "입력 검증 결과 1옵션 이상 feasible이면 결과 화면이 렌더링되고 infeasible 옵션에는 '초기자산 부족' 문구가 표시된다 (Pass: 화면 렌더+표기 / Fail: 전체 에러만)",
+        "3옵션 모두 infeasible이면 Typography로 '초기자산이 부족해요' 에러 상태가 표시되고 차트/비용표가 렌더링되지 않는다 (Pass: 에러 화면 / Fail: 콘텐츠 노출)",
+        "옵션 카드 컴포넌트에서 recommendedOption과 일치하는 옵션에 Chip 1개가 표시된다 (Pass: 1개 / Fail: 0개 또는 2개 이상)",
+        "'공유하기' 버튼 탭 시 createShareUrl가 ok:true이고 navigator.share가 존재하면 navigator.share가 1회 호출되며 인자에 url이 포함된다 (Pass: 1회+url 포함 / Fail: 미호출/누락)",
+        "공유 성공(share resolve 또는 클립보드 복사 성공) 시 setLastShareStorage가 1회 호출되어 updatedAt이 갱신된다 (Pass: timestamp 변경 / Fail: 미변경)",
+        "결과 렌더 성공 시 upsertHistoryEntry가 호출되어 /history에서 항목이 보일 수 있는 데이터가 저장된다 (Pass: 저장됨 / Fail: 저장 안 됨)"
+      ]
+    },
+    "covers": [
+      "AC-S3-1",
+      "AC-S3-4",
+      "AC-S3-5",
+      "AC-S3-7"
+    ],
+    "files": [
+      "src/pages/ResultPage.tsx",
+      "src/pages/components/OptionResultCards.tsx",
+      "src/pages/components/NetWorthChart.tsx",
+      "src/pages/components/CostBreakdownTable.tsx",
+      "src/pages/components/ShareSection.tsx"
+    ],
+    "definition_of_done": [
+      "차트는 SVG/Canvas 커스텀 가능하되 텍스트/행/버튼은 TDS만 사용",
+      "에러/빈 상태는 화면 내 고정 문구+CTA로 처리(크래시/무한로딩 0)",
+      "외부 링크 이동 코드(window.open/location.href) 0"
+    ],
+    "depends_on": [
+      "0004",
+      "0003",
+      "0001"
+    ],
+    "db_schema": "data_model: Result는 route state input으로부터 validate+simulate. HistoryEntry는 upsertHistoryEntry로 'rentcheck:history:v1'에 저장",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 결과(리워드 광고 게이트 포함) (`/result`)\n\n### Layout\n```tsx\n<AppBar title=\"비교 결과예요\" backButton />\n<Spacing size={16} />\n\n{showRewardGate && (\n  <TossRewardAd>\n    <Typography variant=\"body1\" color=\"secondary\">광고 로딩 중...</Typography>\n  </TossRewardAd>\n)}\n\n{showContent && (\n  <>\n    <div style={{ backgroundColor: 'var(--tds-color-grey50)', borderRadius: 16, padding: 20 }}>\n      <Typography variant=\"caption1\" color=\"secondary\">추천</Typography>\n      <Spacing size={8} />\n      <div style={{ display: \"flex\", gap: 8, alignItems: \"center\" }}>\n        <Typography variant=\"heading2\">{recommendedLabel}</Typography>\n        <Chip label=\"가장 유리해요\" variant=\"filled\" />\n      </div>\n      <Spacing size={8} />\n      <Typography variant=\"body2\" color=\"tertiary\">{residenceYears}년 뒤 순자산을 비교했어요</Typography>\n    </div>\n\n    <Spacing size={16} />\n    <Typography variant=\"heading3\">옵션 비교</Typography>\n```\n\n### States\n### Interactions"
+  },
+  {
+    "id": "0008",
+    "title": "S4 히스토리 페이지(리스트/빈상태/삭제 다이얼로그)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/history에서 최근 저장된 비교 결과를 최대 5개까지 ListRow로 보여줘요. 항목 탭 시 /result로 source:'history'와 함께 이동해 재계산/표시할 수 있어요. 히스토리가 0개면 빈 상태 문구와 홈으로 가는 CTA를 제공하고, 개별 삭제/전체 삭제는 Dialog로 2단 확인 후 반영해요.",
+      "acceptance_criteria": [
+        "히스토리 entries.length가 0이면 Typography로 빈 상태 문구가 표시되고 ListRow 항목은 0개 렌더링된다 (Pass: 0개 / Fail: 항목 노출)",
+        "히스토리 항목이 1개 이상이면 각 항목이 ListRow로 렌더링되고, 탭 시 /result로 navigate하며 state.source가 'history'이고 input이 포함된다 (Pass: state 포함 / Fail: 누락)",
+        "개별 삭제를 Dialog에서 확정하면 해당 id의 항목이 스토리지에서 제거되고 리스트에서 즉시 사라진다 (Pass: 삭제 반영 / Fail: 그대로)",
+        "전체 삭제를 Dialog에서 확정하면 entries가 0개가 되고 빈 상태 UI로 전환된다 (Pass: 0개 / Fail: 남아있음)"
+      ]
+    },
+    "covers": [
+      "AC-S4-4"
+    ],
+    "files": [
+      "src/pages/HistoryPage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS AppBar/Typography/ListRow/Button/Dialog/Spacing/Toast만 사용",
+      "삭제 버튼/행 탭 터치 타겟은 TDS 기본(44px 이상)",
+      "console.error 추가 0건(스토리지 실패는 Toast로 고정 메시지)"
+    ],
+    "depends_on": [
+      "0004",
+      "0003",
+      "0001"
+    ],
+    "db_schema": "data_model: HistoryStorageV1.entries(최대 5) from 'rentcheck:history:v1'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Components: AppBar, Typography, ListRow, Button, Dialog, Toast, Spacing\n- Layout:\n  - <AppBar title=\"히스토리예요\" backButton />\n  - entries가 있으면 ListRow로 나열(부제: 거주기간/주요 조건 요약 텍스트)\n  - 상단/하단에 '전체 삭제' Button(또는 ListRow trailing) 제공\n  - Empty: Typography \"아직 저장된 결과가 없어요\" + Button \"홈으로 돌아가기\"\n- States:\n  - Error: 스토리지 파싱 실패 등은 빈 상태로 대체하고 Toast \"히스토리를 불러올 수 없어요\" 1회 표시"
+  },
+  {
+    "id": "0009",
+    "title": "S5 공유로 열기 페이지(/share?p=...) 디코드+에러 상태",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/share?p=...에서 p를 decode해 SharePayload를 복원하고, 성공 시 요약 정보를 보여준 뒤 '결과 보기'로 /result(source:'share') 이동해요. 디코드 실패/버전 불일치/길이 초과는 고정 에러 화면을 보여주고 홈으로 돌아가는 CTA만 제공해요. 외부 도메인 이동은 구현하지 않아요.",
+      "acceptance_criteria": [
+        "query param p가 없으면 Typography로 고정 에러 문구가 표시되고 '결과 보기' CTA는 렌더링되지 않는다 (Pass: CTA 없음 / Fail: CTA 노출)",
+        "decodeShareParam(p)가 ok:true이면 '결과 보기' 버튼이 렌더링되고 탭 시 /result로 navigate하며 state.source='share' 및 input이 포함된다 (Pass: state 포함 / Fail: 누락)",
+        "decodeShareParam(p)가 ok:false이면 '공유 링크를 열 수 없어요' 고정 문구가 표시되고, 홈으로 가는 Button만 제공된다 (Pass: 에러 UI / Fail: 크래시/무한로딩)",
+        "이 페이지 코드에 window.open/window.location.href 호출이 없다 (Pass: 0 / Fail: 존재)"
+      ]
+    },
+    "covers": [
+      "AC-S5-4",
+      "AC-S5-5"
+    ],
+    "files": [
+      "src/pages/SharePage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS AppBar/Typography/Button/Spacing/Toast만 사용",
+      "공유 디코드 실패는 throw 없이 UI로 처리",
+      "외부 링크 기능 제공 0건"
+    ],
+    "depends_on": [
+      "0004",
+      "0001"
+    ],
+    "db_schema": "data_model: /share?p=base64url(SharePayload) → decodeShareParam으로 input 복원",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Components: AppBar, Typography, Button, Toast, Spacing\n- Layout:\n  - <AppBar title=\"공유 결과예요\" backButton />\n  - 성공: Typography로 요약(예: \"N년 비교 조건을 불러왔어요\") + Button \"결과 보기\" + Button \"조건 수정하기\"(→ /input state.prefill)\n  - 실패: Typography \"공유 링크를 열 수 없어요\" + Button \"홈으로 돌아가기\"\n- States:\n  - Error: p 없음/디코드 실패/TOO_LONG 모두 동일한 에러 화면(문구 고정) + Toast는 필요 시 1회"
+  },
+  {
+    "id": "0010",
+    "title": "S6 구매 페이지 UI(결제 전 상태/안내/동의 다이얼로그)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/purchase에서 '광고 없이 결과 보기' 구매 흐름의 UI를 먼저 구성해요. 결제 실행은 다음 통합 패킷에서 연결할 수 있게 버튼/상태/다이얼로그/완료 후 돌아갈 경로(from)을 처리해요. 구매 완료 시에는 '이미 구매했어요' 상태로 CTA를 비활성화해요.",
+      "acceptance_criteria": [
+        "/purchase 진입 시 RouteState.from이 'result'이면 화면에 '결제 후 결과로 돌아가요' 안내 문구가 표시된다 (Pass: 문구 표시 / Fail: 미표시)",
+        "isAdSkipPurchased가 true인 경우 '이미 구매했어요' Typography가 표시되고 결제 버튼은 disabled다 (Pass: disabled / Fail: enabled)",
+        "결제 버튼 탭 시 확인 Dialog가 열리고, 왼쪽 버튼 라벨이 '닫기'다 (Pass: '닫기' / Fail: '취소' 등)",
+        "이 패킷에서는 결제 SDK 호출(useTossPayment)이 아직 없어도 앱이 컴파일된다 (Pass: 빌드 성공 / Fail: import 오류)"
+      ]
+    },
+    "covers": [
+      "AC-S6-1"
+    ],
+    "files": [
+      "src/pages/PurchasePage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS AppBar/Typography/Button/Dialog/Spacing/Toast만 사용",
+      "from state에 따른 안내만 처리(실제 결제는 다음 패킷에서 연동)",
+      "console.error 추가 0건"
+    ],
+    "depends_on": [
+      "0004",
+      "0001"
+    ],
+    "db_schema": "data_model: PurchaseStorageV1.adSkipPurchased(boolean) → UI 상태 분기",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Components: AppBar, Typography, Button, Dialog, Toast, Spacing\n- Layout:\n  - <AppBar title=\"광고 없이 볼래요\" backButton />\n  - 카드 영역(회색 배경): 혜택 설명(예: \"결과 화면 리워드 광고를 건너뛰어요\")\n  - 안내 문구: from==='result'이면 \"결제 후 결과로 돌아가요\"\n  - CTA Button: \"구매하기\"(미구매), \"이미 구매했어요\"(구매 완료 시 disabled)\n  - Dialog: \"결제를 진행할까요?\" / 왼쪽 '닫기', 오른쪽 '결제하기' (결제 호출은 통합 패킷에서 연결)\n- States:\n  - Loading: 결제 중에는 Typography \"로딩 중…\" + Button disabled"
+  },
+  {
+    "id": "0011",
+    "title": "라우팅/Provider 와이어링(App.tsx)",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "React Router로 모든 경로를 연결하고, Purchase/History Provider를 앱 루트에 장착해요. 각 페이지가 RouteState 계약대로 state를 주고받을 수 있게 라우트 구성을 명확히 하고, 잘못된 경로는 홈으로 유도하는 최소 가드만 둬요. main.tsx는 수정하지 않아요.",
+      "acceptance_criteria": [
+        "App.tsx에 '/', '/input', '/result', '/history', '/share', '/purchase' 라우트가 모두 등록된다 (Pass: 각 URL 진입 시 페이지 렌더 / Fail: 404/빈 화면)",
+        "PurchaseProvider와 HistoryProvider가 Router 상위(또는 라우트 공통 상위)에 1회씩 래핑된다 (Pass: 하위 페이지에서 hook 사용 가능 / Fail: context 오류)",
+        "/share는 query param을 유지한 채 SharePage가 렌더링된다 (Pass: /share?p=xxx 렌더 / Fail: 라우팅 누락)",
+        "main.tsx는 변경하지 않는다 (Pass: git diff에 main.tsx 없음 / Fail: 변경됨)"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "라우트 이동에 외부 URL 이동 코드 0건",
+      "앱이 dev/prod 빌드 모두 성공",
+      "라우팅 추가로 console.error가 발생하지 않음"
+    ],
+    "depends_on": [
+      "0010",
+      "0009",
+      "0008",
+      "0007",
+      "0006",
+      "0005",
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0012",
+    "title": "통합 폴리시: 결과 리워드게이트+배너광고 + 결제 연동(useTossPayment)",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "구매 여부에 따라 /result에서 TossRewardAd 게이트를 적용/스킵하고, 결과 화면의 '차트 섹션'과 '비용 분석표' 사이에 AdSlot 배너 1개를 고정 배치해요. /purchase에서는 useTossPayment로 결제를 실행해 성공 시 adSkipPurchased를 저장하고, 결과에서 '광고 없이 결과 보기' 버튼이 /purchase(from:'result')로 이동하게 마무리해요.",
+      "acceptance_criteria": [
+        "미구매 상태(purchase.adSkipPurchased=false)로 /result 진입 시 TossRewardAd 완료 전까지 결과 콘텐츠(카드/차트/비용표)가 렌더링되지 않는다 (Pass: 게이트만 노출 / Fail: 광고 전 콘텐츠 노출)",
+        "구매 상태(purchase.adSkipPurchased=true)로 /result 진입 시 TossRewardAd가 렌더링되지 않고 1초 이내에 결과 콘텐츠가 표시된다 (Pass: 게이트 미노출 / Fail: 게이트 노출/지연)",
+        "AdSlot이 결과 화면에서 '차트 섹션'과 '비용 분석표' 사이에 1개만 렌더링된다 (Pass: 1개, 오버레이 없음 / Fail: 0개 또는 2개 이상)",
+        "/result에서 미구매 상태이며 결과 콘텐츠가 표시된 상태에서 '광고 없이 결과 보기' 탭 시 /purchase로 navigate하고 state.from='result'가 포함된다 (Pass: state 포함 / Fail: 이동 없음/누락)",
+        "/purchase에서 결제 성공 콜백이 1회 발생하면 setAdSkipPurchased(true)가 호출되어 localStorage('rentcheck:purchase:v1')에 adSkipPurchased=true가 저장된다 (Pass: 새로고침 후도 유지 / Fail: 유지 안 됨)",
+        "결제 실패/취소 시 console.error 없이 Toast로 고정 메시지가 표시되고 구매 상태는 false로 유지된다 (Pass: 상태 유지 / Fail: true로 바뀜/에러 로그)"
+      ]
+    },
+    "covers": [
+      "AC-S3-2",
+      "AC-S3-3",
+      "AC-S3-6",
+      "AC-S6-1"
+    ],
+    "files": [
+      "src/pages/ResultPage.tsx",
+      "src/pages/PurchasePage.tsx"
+    ],
+    "definition_of_done": [
+      "Reward gate는 결과(payoff) 화면에만 적용(입력/홈 게이트 0)",
+      "배너 광고는 콘텐츠 사이 배치(겹침/고정 오버레이 0)",
+      "결제/광고 흐름에서 window.open/location.href 사용 0건"
+    ],
+    "depends_on": [
+      "0011"
+    ],
+    "db_schema": "data_model: purchase.adSkipPurchased=true면 /result 게이트 스킵. 결제 성공 시 PurchaseStorageV1에 영구 저장",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  }
+]

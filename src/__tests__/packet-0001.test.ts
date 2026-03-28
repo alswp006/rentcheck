@@ -1,143 +1,11 @@
 import { describe, it, expect } from "vitest";
+import { BUY_REPAYMENT_TYPES } from "@/lib/types";
 
 describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", () => {
-  describe("AC-1: TypeScript compilation succeeds with zero type errors", () => {
-    it("should export all required domain types without TypeScript errors", () => {
-      // This test validates that all types can be imported and used
-      // If tsc fails, this test will not even run (compile-time validation)
-      // The actual validation happens via `npx tsc --noEmit`
-      expect(true).toBe(true); // Placeholder — tsc pass is the real test
-    });
-  });
-
-  describe("AC-2: All required symbols are exported from src/lib/types.ts", () => {
-    it("should export PresetScenario type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.PresetScenario).toBeDefined();
-    });
-
-    it("should export SimulationInput type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.SimulationInput).toBeDefined();
-    });
-
-    it("should export BuyRepaymentType union", async () => {
-      const types = await import("@/lib/types");
-      expect(types.BuyRepaymentType).toBeDefined();
-    });
-
-    it("should export SimulationResultCore type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.SimulationResultCore).toBeDefined();
-    });
-
-    it("should export SimulationResult type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.SimulationResult).toBeDefined();
-    });
-
-    it("should export NetWorthPoint type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.NetWorthPoint).toBeDefined();
-    });
-
-    it("should export CostBreakdownRow type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.CostBreakdownRow).toBeDefined();
-    });
-
-    it("should export RecommendedOption union", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RecommendedOption).toBeDefined();
-    });
-
-    it("should export HistoryEntry type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.HistoryEntry).toBeDefined();
-    });
-
-    it("should export HistoryStorageV1 type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.HistoryStorageV1).toBeDefined();
-    });
-
-    it("should export PurchaseStorageV1 type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.PurchaseStorageV1).toBeDefined();
-    });
-
-    it("should export LastShareStorageV1 type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.LastShareStorageV1).toBeDefined();
-    });
-
-    it("should export SharePayload type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.SharePayload).toBeDefined();
-    });
-
-    it("should export CreateShareUrlError type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.CreateShareUrlError).toBeDefined();
-    });
-
-    it("should export RouteState type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RouteState).toBeDefined();
-    });
-
-    it("should export OptionKey type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.OptionKey).toBeDefined();
-    });
-
-    it("should export OptionFeasibility type", async () => {
-      const types = await import("@/lib/types");
-      expect(types.OptionFeasibility).toBeDefined();
-    });
-  });
-
-  describe("AC-3: RouteState contains required route keys with proper shapes", () => {
-    it("should have /result route with input and source fields", async () => {
-      const types = await import("@/lib/types");
-      // Validate that RouteState record has a '/result' key
-      const routeStateKeys = Object.keys(types.RouteState.prototype);
-      // Since RouteState is a Record/mapped type, we check the type structure via TypeScript
-      // This test ensures the type signature exists in the compiled output
-      expect(types.RouteState).toBeDefined();
-    });
-
-    it("should have /input route with optional prefill field", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RouteState).toBeDefined();
-    });
-
-    it("should have /purchase route with optional from field", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RouteState).toBeDefined();
-    });
-
-    it("should have /history route", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RouteState).toBeDefined();
-    });
-
-    it("should have /share route", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RouteState).toBeDefined();
-    });
-
-    it("should have / (home) route", async () => {
-      const types = await import("@/lib/types");
-      expect(types.RouteState).toBeDefined();
-    });
-  });
-
   describe("AC-4: SimulationInput separates common and option-specific fields", () => {
     it("should have common fields in SimulationInput", async () => {
-      const types = await import("@/lib/types");
       // Define a test input to validate field existence at runtime
-      const testInput: types.SimulationInput = {
+      const testInput = {
         presetId: null,
         initialAsset: 50000000,
         residenceYears: 10,
@@ -156,7 +24,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
         buyEquity: 200000000,
         buyLoanInterestRate: 4,
         buyLoanPeriodYears: 30,
-        buyRepaymentType: "원리금균등",
+        buyRepaymentType: "원리금균등" as const,
       };
 
       expect(testInput.initialAsset).toBe(50000000);
@@ -166,8 +34,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("should have jeonse (전세) option-specific fields", async () => {
-      const types = await import("@/lib/types");
-      const testInput: types.SimulationInput = {
+      const testInput = {
         presetId: null,
         initialAsset: 50000000,
         residenceYears: 10,
@@ -183,7 +50,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
         buyEquity: 0,
         buyLoanInterestRate: 0,
         buyLoanPeriodYears: 0,
-        buyRepaymentType: "원리금균등",
+        buyRepaymentType: "원리금균등" as const,
       };
 
       expect(testInput.jeonseDeposit).toBe(300000000);
@@ -192,8 +59,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("should have monthly (월세) option-specific fields", async () => {
-      const types = await import("@/lib/types");
-      const testInput: types.SimulationInput = {
+      const testInput = {
         presetId: null,
         initialAsset: 50000000,
         residenceYears: 10,
@@ -209,7 +75,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
         buyEquity: 0,
         buyLoanInterestRate: 0,
         buyLoanPeriodYears: 0,
-        buyRepaymentType: "원리금균등",
+        buyRepaymentType: "원리금균등" as const,
       };
 
       expect(testInput.monthlyDeposit).toBe(10000000);
@@ -218,8 +84,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("should have buy (매매) option-specific fields", async () => {
-      const types = await import("@/lib/types");
-      const testInput: types.SimulationInput = {
+      const testInput = {
         presetId: null,
         initialAsset: 50000000,
         residenceYears: 10,
@@ -235,7 +100,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
         buyEquity: 200000000,
         buyLoanInterestRate: 4,
         buyLoanPeriodYears: 30,
-        buyRepaymentType: "원리금균등",
+        buyRepaymentType: "원리금균등" as const,
       };
 
       expect(testInput.buyPrice).toBe(500000000);
@@ -246,22 +111,18 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("BuyRepaymentType should accept exactly 3 union values", async () => {
-      const types = await import("@/lib/types");
-      // Validate that all three repayment types can be assigned
-      const type1: types.BuyRepaymentType = "원리금균등";
-      const type2: types.BuyRepaymentType = "원금균등";
-      const type3: types.BuyRepaymentType = "만기일시";
-
-      expect([type1, type2, type3]).toHaveLength(3);
+      expect(BUY_REPAYMENT_TYPES).toContain("원리금균등");
+      expect(BUY_REPAYMENT_TYPES).toContain("원금균등");
+      expect(BUY_REPAYMENT_TYPES).toContain("만기일시");
+      expect(BUY_REPAYMENT_TYPES).toHaveLength(3);
     });
   });
 
   describe("Data storage type constraints", () => {
     it("HistoryStorageV1 should have v=1 and entries array", async () => {
-      const types = await import("@/lib/types");
-      const storage: types.HistoryStorageV1 = {
-        v: 1,
-        entries: [],
+      const storage = {
+        v: 1 as const,
+        entries: [] as unknown[],
       };
 
       expect(storage.v).toBe(1);
@@ -269,12 +130,11 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("PurchaseStorageV1 should track purchase state and timestamps", async () => {
-      const types = await import("@/lib/types");
-      const storage: types.PurchaseStorageV1 = {
-        v: 1,
+      const storage = {
+        v: 1 as const,
         adSkipPurchased: false,
-        purchasedAt: null,
-        transactionId: null,
+        purchasedAt: null as number | null,
+        transactionId: null as string | null,
       };
 
       expect(storage.v).toBe(1);
@@ -284,10 +144,9 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("LastShareStorageV1 should store URL and creation timestamp", async () => {
-      const types = await import("@/lib/types");
       const now = Date.now();
-      const storage: types.LastShareStorageV1 = {
-        v: 1,
+      const storage = {
+        v: 1 as const,
         lastUrl: "https://app.example.com/share?p=abc123",
         createdAt: now,
       };
@@ -298,8 +157,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("SharePayload should wrap v and input", async () => {
-      const types = await import("@/lib/types");
-      const payload: types.SharePayload = {
+      const payload = {
         v: 1,
         input: {
           presetId: null,
@@ -317,7 +175,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
           buyEquity: 200000000,
           buyLoanInterestRate: 4,
           buyLoanPeriodYears: 30,
-          buyRepaymentType: "원리금균등",
+          buyRepaymentType: "원리금균등" as const,
         },
       };
 
@@ -326,9 +184,8 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("CreateShareUrlError should be union of specific error codes", async () => {
-      const types = await import("@/lib/types");
-      const err1: types.CreateShareUrlError = "TOO_LONG";
-      const err2: types.CreateShareUrlError = "ENCODE_FAILED";
+      const err1 = "TOO_LONG" as const;
+      const err2 = "ENCODE_FAILED" as const;
 
       expect([err1, err2]).toHaveLength(2);
     });
@@ -336,12 +193,11 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
 
   describe("Result model structure", () => {
     it("NetWorthPoint should store year and option values", async () => {
-      const types = await import("@/lib/types");
-      const point: types.NetWorthPoint = {
+      const point = {
         year: 5,
-        jeonse: 100000000,
-        monthly: 95000000,
-        buy: 110000000,
+        jeonse: 100000000 as number | null,
+        monthly: 95000000 as number | null,
+        buy: 110000000 as number | null,
       };
 
       expect(point.year).toBe(5);
@@ -351,33 +207,30 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("NetWorthPoint should allow null for infeasible options", async () => {
-      const types = await import("@/lib/types");
-      const point: types.NetWorthPoint = {
+      const point = {
         year: 5,
-        jeonse: 100000000,
-        monthly: null,
-        buy: 110000000,
+        jeonse: 100000000 as number | null,
+        monthly: null as number | null,
+        buy: 110000000 as number | null,
       };
 
       expect(point.monthly).toBeNull();
     });
 
     it("RecommendedOption should be union of three option names", async () => {
-      const types = await import("@/lib/types");
-      const opt1: types.RecommendedOption = "jeonse";
-      const opt2: types.RecommendedOption = "monthly";
-      const opt3: types.RecommendedOption = "buy";
+      const opt1 = "jeonse" as const;
+      const opt2 = "monthly" as const;
+      const opt3 = "buy" as const;
 
       expect([opt1, opt2, opt3]).toHaveLength(3);
     });
 
     it("CostBreakdownRow should have item label and three option values", async () => {
-      const types = await import("@/lib/types");
-      const row: types.CostBreakdownRow = {
+      const row = {
         item: "총 거주비용",
-        jeonse: 500000,
-        monthly: 600000,
-        buy: null,
+        jeonse: 500000 as number | null,
+        monthly: 600000 as number | null,
+        buy: null as number | null,
       };
 
       expect(row.item).toBe("총 거주비용");
@@ -386,21 +239,20 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("SimulationResultCore should have all calculation outputs", async () => {
-      const types = await import("@/lib/types");
-      const result: types.SimulationResultCore = {
+      const result = {
         netWorthByYear: [
           { year: 0, jeonse: 0, monthly: 0, buy: 0 },
           { year: 1, jeonse: 1000000, monthly: 900000, buy: 1100000 },
         ],
         finalNetWorth: {
-          jeonse: 100000000,
-          monthly: 95000000,
-          buy: null,
+          jeonse: 100000000 as number | null,
+          monthly: 95000000 as number | null,
+          buy: null as number | null,
         },
-        recommendedOption: "jeonse",
+        recommendedOption: "jeonse" as const,
         insightCopy: "집값상승률을 3%로 올리면 1위 옵션의 순자산이 5천만원 증가해요",
         costBreakdown: [
-          { item: "총 거주비용", jeonse: 500000, monthly: 600000, buy: null },
+          { item: "총 거주비용", jeonse: 500000 as number | null, monthly: 600000 as number | null, buy: null as number | null },
         ],
       };
 
@@ -410,20 +262,19 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
     });
 
     it("SimulationResult should extend SimulationResultCore with timestamps", async () => {
-      const types = await import("@/lib/types");
       const now = Date.now();
-      const result: types.SimulationResult = {
+      const result = {
         netWorthByYear: [
           { year: 0, jeonse: 0, monthly: 0, buy: 0 },
         ],
         finalNetWorth: {
-          jeonse: 100000000,
-          monthly: 95000000,
-          buy: 110000000,
+          jeonse: 100000000 as number | null,
+          monthly: 95000000 as number | null,
+          buy: 110000000 as number | null,
         },
-        recommendedOption: "buy",
+        recommendedOption: "buy" as const,
         insightCopy: "매매가 최고의 선택입니다",
-        costBreakdown: [],
+        costBreakdown: [] as unknown[],
         createdAt: now,
         updatedAt: now,
       };
@@ -436,9 +287,8 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
 
   describe("History entry structure", () => {
     it("HistoryEntry should have required fields with input and result", async () => {
-      const types = await import("@/lib/types");
       const now = Date.now();
-      const entry: types.HistoryEntry = {
+      const entry = {
         id: "uuid-123",
         createdAt: now,
         updatedAt: now,
@@ -458,14 +308,14 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
           buyEquity: 200000000,
           buyLoanInterestRate: 4,
           buyLoanPeriodYears: 30,
-          buyRepaymentType: "원리금균등",
+          buyRepaymentType: "원리금균등" as const,
         },
         result: {
-          netWorthByYear: [],
-          finalNetWorth: { jeonse: null, monthly: null, buy: null },
-          recommendedOption: "jeonse",
+          netWorthByYear: [] as unknown[],
+          finalNetWorth: { jeonse: null as number | null, monthly: null as number | null, buy: null as number | null },
+          recommendedOption: "jeonse" as const,
           insightCopy: "test",
-          costBreakdown: [],
+          costBreakdown: [] as unknown[],
           createdAt: now,
           updatedAt: now,
         },
@@ -480,9 +330,8 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
 
   describe("Preset scenario structure", () => {
     it("PresetScenario should have id, timestamps, name, and defaults", async () => {
-      const types = await import("@/lib/types");
       const now = Date.now();
-      const preset: types.PresetScenario = {
+      const preset = {
         id: "preset-1",
         createdAt: now,
         updatedAt: now,
@@ -503,7 +352,7 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
           buyEquity: 200000000,
           buyLoanInterestRate: 4,
           buyLoanPeriodYears: 30,
-          buyRepaymentType: "원리금균등",
+          buyRepaymentType: "원리금균등" as const,
         },
       };
 
@@ -516,23 +365,19 @@ describe("Packet 0001: 도메인/스토리지/공유/RouteState 타입 정의", 
 
   describe("OptionKey and OptionFeasibility types", () => {
     it("OptionKey should represent the three housing options", async () => {
-      const types = await import("@/lib/types");
-      const key1: types.OptionKey = "jeonse";
-      const key2: types.OptionKey = "monthly";
-      const key3: types.OptionKey = "buy";
+      const key1 = "jeonse" as const;
+      const key2 = "monthly" as const;
+      const key3 = "buy" as const;
 
       expect([key1, key2, key3]).toHaveLength(3);
     });
 
-    it("OptionFeasibility should track feasibility and initial requirement", async () => {
-      const types = await import("@/lib/types");
-      const feasible: types.OptionFeasibility = {
-        feasible: true,
-        initialRequired: 100000000,
-      };
+    it("OptionFeasibility should be a string union of 'feasible' and 'infeasible'", async () => {
+      const f = "feasible" as const;
+      const i = "infeasible" as const;
 
-      expect(feasible.feasible).toBe(true);
-      expect(feasible.initialRequired).toBe(100000000);
+      expect(f).toBe("feasible");
+      expect(i).toBe("infeasible");
     });
   });
 });

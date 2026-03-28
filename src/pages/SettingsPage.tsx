@@ -48,15 +48,14 @@ export default function SettingsPage(): React.ReactElement {
 
   return (
     <>
-      <Top>
-        <Top.TitleParagraph>설정</Top.TitleParagraph>
-      </Top>
+      <Top title={<Top.TitleParagraph>설정</Top.TitleParagraph>} />
 
-      <Spacing />
+      <Spacing size={24} />
 
       {/* 이용권 섹션 */}
       <ListRow>
         <ListRow.Texts
+          type="2RowTypeA"
           top="이용권"
           bottom={effectiveEntitlement.isPremium ? "프리미엄 사용 중" : "무료 사용 중"}
         />

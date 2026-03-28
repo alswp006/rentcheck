@@ -35,7 +35,7 @@ export default function HomePage(): React.ReactElement {
   if (loading) {
     return (
       <div>
-        <Top title="RentCheck" />
+        <Top title={<Top.TitleParagraph>현명한 주거 선택</Top.TitleParagraph>} />
         <Paragraph.Text typography="st6">불러오는 중...</Paragraph.Text>
       </div>
     );
@@ -43,12 +43,11 @@ export default function HomePage(): React.ReactElement {
 
   return (
     <div>
-      <Top title="RentCheck" />
+      <Top title={<Top.TitleParagraph>현명한 주거 선택</Top.TitleParagraph>} />
       {PRESET_SCENARIOS.map((preset) => (
         <ListRow
           key={preset.id}
           title={preset.name}
-          padding="M"
           onClick={() => handlePresetClick(preset)}
         />
       ))}

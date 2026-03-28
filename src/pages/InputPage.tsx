@@ -92,6 +92,7 @@ export default function InputPage(): React.ReactElement {
     fields.map(({ key, label, suffix, divisor }) => (
       <React.Fragment key={key}>
         <TextField
+          variant="box"
           label={label}
           value={toDisplay(input[key] as number, divisor)}
           onChange={handleFieldChange(key, divisor)}
@@ -110,15 +111,13 @@ export default function InputPage(): React.ReactElement {
 
   return (
     <div>
-      <Top>
-        <Top.TitleParagraph>조건 입력</Top.TitleParagraph>
-      </Top>
+      <Top title={<Top.TitleParagraph>조건 입력</Top.TitleParagraph>} />
 
       <Spacing size={8} />
 
-      <Tab value={activeTab} onChange={(val: string) => setActiveTab(val as OptionKey)}>
-        {TAB_KEYS.map((key) => (
-          <Tab.Item key={key} value={key}>
+      <Tab onChange={(index: number) => setActiveTab(TAB_KEYS[index])}>
+        {TAB_KEYS.map((key, index) => (
+          <Tab.Item key={key} selected={activeTab === key}>
             {TAB_LABELS[key]}
           </Tab.Item>
         ))}

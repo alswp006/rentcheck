@@ -42,14 +42,12 @@ export default function ResultPage(): JSX.Element {
     return simulate(input);
   }, [input]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleRetry = (): void => navigate("/input");
+  const handleRetry = (): void => { navigate("/input"); };
 
   if (!input || !simResult) {
     return (
       <div>
-        <Top>
-          <Top.TitleParagraph>비교 결과</Top.TitleParagraph>
-        </Top>
+        <Top title={<Top.TitleParagraph>비교 결과</Top.TitleParagraph>} />
         <Paragraph.Text typography="st6">입력값이 없어요</Paragraph.Text>
         <Button variant="fill" color="primary" onClick={handleRetry}>
           조건 다시 입력하기
@@ -61,9 +59,7 @@ export default function ResultPage(): JSX.Element {
   if (!simResult.ok) {
     return (
       <div>
-        <Top>
-          <Top.TitleParagraph>비교 결과</Top.TitleParagraph>
-        </Top>
+        <Top title={<Top.TitleParagraph>비교 결과</Top.TitleParagraph>} />
         <Spacing size={16} />
         <Paragraph.Text typography="st6">{simResult.message}</Paragraph.Text>
         <Spacing size={16} />
@@ -79,9 +75,7 @@ export default function ResultPage(): JSX.Element {
 
   return (
     <div>
-      <Top>
-        <Top.TitleParagraph>비교 결과</Top.TitleParagraph>
-      </Top>
+      <Top title={<Top.TitleParagraph>비교 결과</Top.TitleParagraph>} />
 
       <Spacing size={16} />
       <div
@@ -106,12 +100,13 @@ export default function ResultPage(): JSX.Element {
         const isRecommended = result.recommendedOption === option;
         const netWorth = result.finalNetWorth[option];
         return (
-          <ListRow key={option} padding="M" onClick={() => {}}>
+          <ListRow key={option} onClick={() => {}}>
             <ListRow.Texts
+              type="2RowTypeA"
               top={OPTION_LABELS[option]}
               bottom={`${years}년 후 순자산: ${formatCurrency(netWorth)}`}
             />
-            {isRecommended && <Badge>추천</Badge>}
+            {isRecommended && <Badge size="small" color="blue" variant="fill">추천</Badge>}
           </ListRow>
         );
       })}

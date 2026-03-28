@@ -17,7 +17,9 @@ function PrivateRoute({ children }: { children: React.ReactElement }): React.Rea
     }
   }, [loading, user, login]);
 
-  if (user == null) return <></>;
+  if (loading || user == null) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100dvh' }}>불러오는 중...</div>;
+  }
   return children;
 }
 

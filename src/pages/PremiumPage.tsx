@@ -30,7 +30,7 @@ export default function PremiumPage(): React.ReactElement {
 
   return (
     <>
-      <Top>
+      <Top title={<Top.TitleParagraph>프리미엄</Top.TitleParagraph>}>
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -45,10 +45,9 @@ export default function PremiumPage(): React.ReactElement {
         >
           ← 뒤로
         </button>
-        <Top.TitleParagraph>프리미엄</Top.TitleParagraph>
       </Top>
 
-      <Spacing />
+      <Spacing size={24} />
 
       {/* 요약 카드 */}
       <div style={{ padding: "0 16px" }}>
@@ -62,18 +61,18 @@ export default function PremiumPage(): React.ReactElement {
           <Paragraph.Text typography="t5">
             프리미엄으로 더 정확한 비교를
           </Paragraph.Text>
-          <Spacing />
+          <Spacing size={16} />
           <Paragraph.Text typography="st6">
             {`무료: ${FREE_YEARS}년 시뮬레이션`}
           </Paragraph.Text>
-          <Spacing />
+          <Spacing size={16} />
           <Paragraph.Text typography="st6">
             {`프리미엄: ${PREMIUM_YEARS}년 시뮬레이션`}
           </Paragraph.Text>
         </div>
       </div>
 
-      <Spacing />
+      <Spacing size={16} />
 
       {/* 혜택 리스트 */}
       {BENEFITS.map((benefit) => (
@@ -85,7 +84,7 @@ export default function PremiumPage(): React.ReactElement {
         </React.Fragment>
       ))}
 
-      <Spacing />
+      <Spacing size={16} />
 
       {/* 로그인 필요 안내 */}
       {user == null && (
@@ -99,7 +98,7 @@ export default function PremiumPage(): React.ReactElement {
         </div>
       )}
 
-      <Spacing />
+      <Spacing size={16} />
 
       {/* 결제 CTA */}
       <div

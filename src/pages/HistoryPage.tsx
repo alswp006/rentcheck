@@ -62,9 +62,7 @@ export default function HistoryPage() {
 
   return (
     <>
-      <Top>
-        <Top.TitleParagraph>히스토리</Top.TitleParagraph>
-      </Top>
+      <Top title={<Top.TitleParagraph>히스토리</Top.TitleParagraph>} />
 
       {error && (
         <>
@@ -99,7 +97,7 @@ export default function HistoryPage() {
               key={entry.id}
               onClick={() => navigate("/result", { state: { input: entry.input } })}
             >
-              <ListRow.Texts top={entry.label} bottom={new Date(entry.createdAt).toLocaleDateString("ko-KR")} />
+              <ListRow.Texts type="2RowTypeA" top={entry.label} bottom={new Date(entry.createdAt).toLocaleDateString("ko-KR")} />
               <button
                 aria-label="삭제"
                 onClick={(e) => {
@@ -119,11 +117,15 @@ export default function HistoryPage() {
         title="전체 삭제"
         description="모든 히스토리를 삭제할까요?"
         alertButton={
-          <AlertDialog.AlertButton onClick={handleClearConfirm}>삭제</AlertDialog.AlertButton>
+          <>
+            <AlertDialog.AlertButton onClick={handleClearConfirm}>삭제</AlertDialog.AlertButton>
+            <AlertDialog.AlertButton onClick={() => setClearDialogOpen(false)}>닫기</AlertDialog.AlertButton>
+          </>
         }
+        onClose={() => setClearDialogOpen(false)}
       />
 
-      <Toast open={toastOpen} text={toastText} />
+      <Toast open={toastOpen} text={toastText} position="bottom" onClose={() => setToastOpen(false)} />
     </>
   );
 }

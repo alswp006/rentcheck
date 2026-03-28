@@ -32,7 +32,8 @@ describe('도메인 타입 + RouteState 계약 정의', () => {
     ];
 
     for (const typeName of requiredTypes) {
-      expect(typesModule).toHaveProperty(typeName, `Type ${typeName} should be exported`);
+      expect(typesModule).toHaveProperty(typeName);
+      expect(typesModule[typeName as keyof typeof typesModule]).toBeDefined();
     }
   });
 

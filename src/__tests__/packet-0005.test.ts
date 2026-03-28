@@ -76,7 +76,7 @@ describe('시뮬레이션 엔진(runSimulation) 순수 함수 구현', () => {
 
       // Result should not contain any timestamp-like fields
       // (all fields should be computed from input only)
-      expect(result.finalNetWorth.jeonse).toBe(typeof 'number');
+      expect(typeof result.finalNetWorth.jeonse).toBe('number');
       expect(result.netWorthSeries[0]).toBeDefined();
     });
 
@@ -169,8 +169,18 @@ describe('시뮬레이션 엔진(runSimulation) 순수 함수 구현', () => {
   describe('AC-3: Recommended option is max finalNetWorth (F3-AC-2)', () => {
     it('should recommend "monthly" when monthly has highest finalNetWorth', () => {
       const input = createValidInput({
-        monthlyRent: 2_000_000, // Monthly rent is favorable
+        initialAsset: 500_000_000,
+        // Monthly option: minimal capital locked, more to invest
+        monthlyDeposit: 50_000_000,
+        monthlyRent: 2_000_000,
         monthlyRentIncreaseRate: 0.02,
+        // Jeonse and buy options: more capital locked (reduces investable amount)
+        jeonseDeposit: 200_000_000,
+        jeonseLoanRatio: 0,
+        buyPrice: 0,
+        buyEquity: 200_000_000,
+        // Investment growth makes monthly's larger investable amount more valuable
+        investmentReturnRate: 0.05,
         residencePeriodYears: 5,
       });
       const result = runSimulation(input);

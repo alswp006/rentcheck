@@ -1,0 +1,347 @@
+[
+  {
+    "id": "0001",
+    "title": "도메인 타입 + RouteState 계약 정의",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "SPEC의 도메인 모델과 라우팅 state 계약을 단일 소스 오브 트루스로 정의해요. 런타임 코드는 추가하지 않고, 이후 모든 페이지가 RouteState를 통해 location.state를 컴파일 타임에 검증하도록 기반을 만들어요.",
+      "acceptance_criteria": [
+        "src/lib/types.ts에 PresetScenario, BuyRepaymentType, SimulationInput, RecommendedOption, CostBreakdownRow, SimulationResult, SimulationError, SimulationOutcome, HistoryEntry, SharePayloadVersion, SharePayloadV1, SharePayload, ShareDecodeError, RouteState가 export되면 PASS / 하나라도 누락되면 FAIL",
+        "RouteState['/input']가 { presetId: 'P1'|'P2'|'P3'|'P4'|null } | { input: SimulationInput } | undefined를 허용하면 PASS / 그 외 타입만 허용하거나 컴파일 오류면 FAIL",
+        "RouteState['/result']가 { input: SimulationInput; source: 'input'|'history'|'share' } | undefined이면 PASS / source가 다른 값이 허용되면 FAIL",
+        "RouteState['/']와 RouteState['/history']가 undefined만 허용하면 PASS / 다른 값이 허용되면 FAIL",
+        "빌드(타입체크)가 TypeScript 에러 없이 통과하면 PASS / 에러가 발생하면 FAIL"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "types.ts는 타입/인터페이스만 포함(함수/상수/런타임 코드 없음)",
+      "RouteState를 이후 페이지에서 import 가능한 형태로 export"
+    ],
+    "depends_on": [],
+    "db_schema": "data_model: Domain types only (no persistence code)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "localStorage 저장소 헬퍼(History + UIState)",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "localStorage I/O를 안전하게 감싸는 저장소 헬퍼를 구현해요. 히스토리 로드는 손상 엔트리를 스킵하고, 저장은 중복 처리/정렬/최대 5개 eviction 및 QuotaExceededError를 예외 없이 반환값으로 처리해요.",
+      "acceptance_criteria": [
+        "KEY 'rentcheck.history.v1'가 미존재(getItem===null)면 loadHistory()가 { ok:true, entries: [] }를 반환하면 PASS / ok:false면 FAIL",
+        "저장 값이 'NOT_JSON'이면 loadHistory()가 { ok:false, error:'PARSE_FAIL' }면 PASS / ok:true로 반환하면 FAIL",
+        "배열 내 entry.input이 null 등 필수 필드 누락이면 해당 엔트리만 제외하고 나머지는 유지한 entries를 반환하면 PASS / 전체 실패 또는 손상 엔트리 포함이면 FAIL",
+        "upsertHistory(input, nowISO) 호출 시 기존 길이가 5이고 새 항목이 추가되는 경우, 저장 직후 배열 길이가 정확히 5이고 새 항목이 index 0이면 PASS / 길이가 4 또는 6이거나 index 0이 아니면 FAIL (AC-S4-5)",
+        "localStorage.setItem이 QuotaExceededError를 throw하면 upsertHistory가 { ok:false, error:'QUOTA_EXCEEDED' }를 반환하고 기존 저장 문자열이 변경되지 않으면 PASS / throw 전파 또는 값 변경이면 FAIL",
+        "rentcheck.ui.v1에 대해 saveUiState가 성공 시 JSON object 문자열을 저장하면 PASS / 저장이 비객체 또는 throw면 FAIL",
+        "loadUiState는 파싱/읽기 실패 시 throw 없이 { ok:false }를 반환하면 PASS / 예외가 전파되면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S4-5"
+    ],
+    "files": [
+      "src/lib/storage.ts"
+    ],
+    "definition_of_done": [
+      "모든 함수는 throw 금지(try/catch)",
+      "history: deepEqual 중복 처리 + updatedAt 갱신 + index 0 이동 + createdAt 유지 정책 포함",
+      "성공/실패는 union 반환값으로 표현"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "data_model: HistoryEntry[] → localStorage key 'rentcheck.history.v1'; UiState{ lastPresetId?: 'P1'|'P2'|'P3'|'P4' } → key 'rentcheck.ui.v1'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "순수 도메인 유틸(포맷/검증/시뮬/공유/클립보드) + HistoryStore",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "네트워크 없이 동작하는 핵심 로직을 한 곳에서 제공해요: 숫자/원화 포맷, 입력 파서, 입력 검증, simulate() 순수 시뮬레이션, 공유 Base64URL 인코딩/디코딩, 클립보드 복사. 또한 페이지 공통 사용을 위해 HistoryProvider(Context)로 로드/저장/삭제를 노출해요.",
+      "acceptance_criteria": [
+        "formatKRW(1234567)이 '1,234,567원'을 반환하면 PASS / 다른 포맷이면 FAIL",
+        "parseNumberInput('1,234')===1234, parseNumberInput('')===null, parseNumberInput('  ')===null이면 PASS / 하나라도 다르면 FAIL",
+        "validateSimulationInput에서 residencePeriodYears가 1~30 밖이면 에러 문구가 정확히 '거주기간은 1~30년만 입력할 수 있어요'면 PASS / 문구 불일치면 FAIL",
+        "validateSimulationInput에서 buyEquity>buyPrice면 '자기자본은 매매가를 초과할 수 없어요'면 PASS / 불일치면 FAIL",
+        "simulate(input)는 어떤 입력에서도 throw하지 않고, NaN/Infinity 감지 시 { ok:false, error:'INVALID_INPUT' }를 반환하면 PASS / throw 또는 ok:true면 FAIL",
+        "simulate에서 residencePeriodYears=10이면 netWorthByYear.* 길이가 각각 11이면 PASS / 하나라도 11이 아니면 FAIL",
+        "decodeSharePayloadFromSearch에서 s 미존재면 { ok:false, error:'MISSING_PARAM' }, s 길이>1800이면 { ok:false, error:'TOO_LONG' }면 PASS / 다른 에러면 FAIL",
+        "copyTextToClipboard는 navigator.clipboard 미지원 환경에서도 throw 없이 { ok:false } 또는 { ok:true }를 resolve하면 PASS / 예외 reject면 FAIL",
+        "HistoryProvider의 refresh/saveFromInput/clearAll 어떤 호출도 throw하지 않으면 PASS / 예외가 전파되면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S3-3"
+    ],
+    "files": [
+      "src/lib/domain.ts",
+      "src/lib/state/HistoryStore.tsx"
+    ],
+    "definition_of_done": [
+      "domain.ts 내 함수는 DOM 의존 없이(clipboard 제외) 순수 함수로 구성",
+      "HistoryStore는 loadError/lastWriteError를 상태로 노출",
+      "빌드/타입체크 통과"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "data_model: SimulationInput/Result/Outcome/SharePayload는 localStorage 미사용(공유는 query); HistoryStore는 storage.ts의 rentcheck.history.v1를 사용",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "공용 AppBar 래퍼(AppTopBar) + Back 버튼 규칙",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "페이지별 AppBar 구현을 통일하기 위해 TDS AppBar 기반의 공용 컴포넌트를 만들어요. backButton 옵션이 켜져 있으면 기본은 navigate(-1)로, 히스토리 스택이 얕거나 실패 시 navigate('/')로 폴백해요. 페이지는 이 컴포넌트를 사용해요.",
+      "acceptance_criteria": [
+        "AppTopBar에 backButton=false면 뒤로가기 UI가 렌더링되지 않으면 PASS / 렌더링되면 FAIL",
+        "backButton=true에서 뒤로가기 탭 시 navigate(-1)이 1회 호출되면 PASS / 호출이 없거나 2회 이상이면 FAIL",
+        "navigate(-1) 호출이 예외/불가 상황(try/catch)일 때 navigate('/')가 1회 호출되면 PASS / 폴백이 없으면 FAIL",
+        "컴포넌트가 @toss/tds-mobile AppBar만 사용하면 PASS / 다른 UI 라이브러리 사용 시 FAIL"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/components/AppTopBar.tsx"
+    ],
+    "definition_of_done": [
+      "페이지에서 재사용 가능(제목/우측 액션 슬롯은 optional)",
+      "외부 URL 이동 로직 없음"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS AppBar 단독 사용. props 예: { title: string; backButton?: boolean; right?: ReactNode }. backButton=true면 onBack에서 react-router-dom useNavigate 사용. 커스텀 CSS는 금지(필요 시 최소 flex 레이아웃만)."
+  },
+  {
+    "id": "0005",
+    "title": "S1 홈 페이지(/) 구현(프리셋 + 최근 기록 미리보기)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "홈에서 프리셋 4개/직접 입력으로 /input 진입과 최근 히스토리 미리보기를 제공해요. localStorage 로드 실패는 Toast로 1회 안내하고, 히스토리 0개면 빈 문구를 보여줘요. 모든 탭은 RouteState 계약대로 navigate state를 전달해요.",
+      "acceptance_criteria": [
+        "프리셋 P1 ListRow 탭 시 navigate('/input',{state:{presetId:'P1'}})가 1회 호출되면 PASS / 호출이 없거나 2회 이상이면 FAIL (AC-S1-1)",
+        "히스토리 미리보기 항목 탭 시 navigate('/input',{state:{input:entry.input}})가 1회 호출되면 PASS / state에 input이 없으면 FAIL (AC-S1-2)",
+        "rentcheck.history.v1가 [] 또는 미존재일 때 '최근 기록이 없어요' Typography가 존재하면 PASS / 없으면 FAIL (AC-S1-3)",
+        "히스토리 로드가 PARSE_FAIL/READ_FAIL로 실패하면 300ms 이내 Toast '저장된 기록을 불러오지 못했어요'가 1회 표시되면 PASS / 미표시 또는 2회 이상이면 FAIL (AC-S1-4)",
+        "'최근 기록 더보기' 탭 시 navigate('/history')가 1회 호출되면 PASS / 호출이 없으면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S1-1",
+      "AC-S1-2",
+      "AC-S1-3",
+      "AC-S1-4"
+    ],
+    "files": [
+      "src/pages/HomePage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트만으로 화면 구성(ListRow/Button/Typography/Spacing/Toast/AppBar)",
+      "tickWeak/success 햅틱 적용(프리셋/히스토리=tickWeak, 직접입력=success)",
+      "최근 기록은 최대 3개만 미리보기 노출"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "data_model: HistoryEntry[] from 'rentcheck.history.v1' (read-only in this page)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 홈(프리셋 선택) (`/`)\n\n### Layout\n```tsx\n<AppBar title=\"비교 시작하기\" />\n<Spacing size={16} />\n\n// Pattern A: Hero Summary Card (안내용)\n<div style={{ backgroundColor: 'var(--tds-color-grey50)', borderRadius: 16, padding: 20 }}>\n  <Typography variant=\"caption1\" color=\"secondary\">3초만에 비교해요</Typography>\n  <Spacing size={8} />\n  <Typography variant=\"heading2\">전세/월세/매매</Typography>\n  <Spacing size={4} />\n  <Typography variant=\"body2\" color=\"tertiary\">프리셋으로 시작하거나 직접 입력할 수 있어요</Typography>\n</div>\n\n<Spacing size={24} />\n<Typography variant=\"heading3\">프리셋으로 시작해요</Typography>\n<Spacing size={12} />\n<ListRow title=\"기본 10년\" subTitle=\"가장 많이 쓰는 조건이에요\" padding=\"L\" onClick={() => {}} />\n<ListRow title=\"보수적 5년\" subTitle=\"짧게, 보수적으로 비교해요\" padding=\"L\" onClick={() => {}} />\n<ListRow title=\"상승장 10년\" subTitle=\"집값 상승을 높게 가정해요\" padding=\"L\" onClick={() => {}} />\n<ListRow title=\"금리 상승 3년\" subTitle=\"금리 부담을 크게 가정해요\" padding=\"L\" onClick={() => {}} />\n\n<Spacing size={16} />\n<Button variant=\"secondary\" size=\"large\" onClick={() => {}}>직접 입력할게요</Button>\n\n<Spacing size={24} />\n<Typography variant=\"heading3\">최근 기록</Typography>\n<Spacing size={12} />\n// 최근 3개 미리보기 ListRow들\n<ListRow title=\"최근 비교 1\" subTitle=\"10년 · 2026.03.28\" padding=\"M\" onClick={() => {}} />\n<ListRow title=\"최근 비교 2\" subTitle=\"5년 · 2026.03.20\" padding=\"M\" onClick={() => {}} />\n\n<Spacing size={8} />\n<ListRow title=\"최근 기록 더보기\" padding=\"M\" onClick={() => {}} />\n\n// 실패 시 1회 노출\n<Toast message=\"저장된 기록을 불러오지 못했어요\" />\n```\n\n### States\n- Loading:\n  - 홈은 별도 로딩 UI 없음(동기 localStorage). 단, 구현상 로딩을 둔다면:\n  - `<Typography variant=\"body2\" color=\"tertiary\">화면을 불러오는 중이에요...</Typography>`\n- Empty:\n  - 히스토리 0개면 최근 기록 섹션에\n  - `<Typography variant=\"body2\" color=\"tertiary\">최근 기록이 없어요</Typography>`\n- Error:\n  - localStorage 예외 시\n  - `<Toast message=\"저장된 기록을 불러오지 못했어요\" duration={2000} />`\n\n### Interactions\n- 프리셋 ListRow 탭: `navigate('/input', { state: { presetId: 'P1' } })` (각 프리셋 id로) + 햅틱 `tickWeak`\n- “직접 입력할게요” 버튼 탭: `navigate('/input', { state: { presetId: null } })` + 햅틱 `success`\n- 히스토리 미리보기 ListRow 탭: `navigate('/input', { state: { input: entry.input } })` + 햅틱 `tickWeak`\n- “최근 기록 더보기” 탭: `navigate('/history')` + 햅틱 `tickWeak`\n"
+  },
+  {
+    "id": "0006",
+    "title": "S2 입력 페이지(/input) 구현(3탭 + 공통설정 + 검증/CTA)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "전세/월세/매매 3탭 입력 폼과 공통 설정을 구현해요. presetId 또는 input incoming state로 초기값을 채우고(최대 300ms 로딩 문구), 손상된 state면 Dialog로 복구 경로(홈 이동)를 제공해요. 결과보기 CTA는 blur 후 검증 성공 시만 /result로 이동해요.",
+      "acceptance_criteria": [
+        "초기화 중(최대 300ms) '입력값을 불러오는 중...' 문구가 표시되면 PASS / 표시되지 않으면 FAIL (AC-S2-1)",
+        "유효 입력에서 '결과 보기' 탭 시 navigate('/result',{state:{input,source:'input'}})가 1회 호출되면 PASS / 호출 없으면 FAIL (AC-S2-2)",
+        "residencePeriodYears가 1~30 밖일 때 '결과 보기' 탭 후 /result navigate가 호출되지 않으면 PASS / 호출되면 FAIL (AC-S2-3)",
+        "incoming state에 필수 필드 누락 input이 전달되면 Dialog '입력값을 불러올 수 없어요'가 표시되고 '홈으로' 탭 시 navigate('/')가 1회 호출되면 PASS / 둘 중 하나라도 없으면 FAIL (AC-S2-4)",
+        "'결과 보기' 탭 시 document.activeElement가 input이면 blur가 호출되어 키보드 포커스가 해제되면 PASS / 포커스가 유지되면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S2-1",
+      "AC-S2-2",
+      "AC-S2-3",
+      "AC-S2-4"
+    ],
+    "files": [
+      "src/pages/InputPage.tsx"
+    ],
+    "definition_of_done": [
+      "TabBar는 query(tab=jeonse|monthly|buy)로 상태 동기화",
+      "고정 CTA는 safe-area inset 포함 paddingBottom 적용",
+      "필드 에러는 TextField 아래 Typography로 노출(문구는 validateSimulationInput 결과 사용)",
+      "탭/칩/CTA에 햅틱(tickWeak/success) 적용"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "data_model: incoming RouteState['/input']; presets/default input from domain.ts; no localStorage write here",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 입력(3탭 + 공통 설정) (`/input`)\n\n### Layout\n```tsx\n<AppBar title=\"조건 입력\" backButton />\n<Spacing size={12} />\n\n// 플로팅 TabBar (상단 sticky)\n<div style={{ position: 'sticky', top: 0, zIndex: 1, padding: 16, backgroundColor: 'var(--tds-color-background)' }}>\n  <div style={{ backgroundColor: 'var(--tds-color-grey50)', borderRadius: 16, padding: 8 }}>\n    <TabBar\n      items={[\n        { label: '전세', path: '/input?tab=jeonse' },\n        { label: '월세', path: '/input?tab=monthly' },\n        { label: '매매', path: '/input?tab=buy' },\n      ]}\n      activeIndex={0}\n    />\n  </div>\n</div>\n\n<Spacing size={12} />\n<Typography variant=\"caption1\" color=\"tertiary\">입력값을 불러오는 중...</Typography>  // (최대 300ms 로딩 시)\n\n// (현재 탭: 전세 예시)\n<Typography variant=\"heading3\">전세</Typography>\n<Spacing size={12} />\n<TextField label=\"전세 보증금\" placeholder=\"예: 300000000\" value=\"\" onChange={(v) => {}} type=\"number\" />\n<TextField label=\"대출 비율(0~1)\" placeholder=\"예: 0.6\" value=\"\" onChange={(v) => {}} type=\"number\" />\n<TextField label=\"대출 이율(연 %)\" placeholder=\"예: 4.2\" value=\"\" onChange={(v) => {}} type=\"number\" />\n<Typography variant=\"caption2\" color=\"tertiary\">숫자만 입력할 수 있어요</Typography>\n\n<Spacing size={24} />\n<Typography variant=\"heading3\">공통 설정</Typography>\n<Spacing size={12} />\n<TextField label=\"초기 자산\" placeholder=\"예: 100000000\" value=\"\" onChange={(v) => {}} type=\"number\" />\n<TextField label=\"거주 기간(년)\" placeholder=\"1~30\" value=\"\" onChange={(v) => {}} type=\"number\" />\n<TextField label=\"투자 수익률(연 %)\" placeholder=\"예: 5\" value=\"\" onChange={(v) => {}} type=\"number\" />\n<TextField label=\"집값 상승률(연 %)\" placeholder=\"예: 2\" value=\"\" onChange={(v) => {}} type=\"number\" />\n\n// 치명적 에러(손상된 incoming state)\n<Dialog\n  open={false}\n  title=\"입력값을 불러올 수 없어요\"\n  description=\"홈으로 이동해서 다시 시작해주세요\"\n  confirmText=\"홈으로\"\n  onConfirm={() => {}}\n/>\n\n// Pattern D: Bottom Fixed CTA\n<div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', backgroundColor: 'var(--tds-color-background)' }}>\n  <Button variant=\"primary\" size=\"large\" onClick={() => {}}>결과 보기</Button>\n</div>\n```\n\n### States\n- Loading:\n  - `<Typography variant=\"body2\" color=\"tertiary\">입력값을 불러오는 중...</Typography>`\n- Empty:\n  - 입력 화면은 빈 상태 없음(항상 폼 표시). 값이 비어 있으면 placeholder로 유도.\n- Error:\n  - incoming state 손상 시:\n  - 위 `Dialog open={true}` 노출 + 확인 탭 시 `/`로 이동\n\n### Interactions\n- TabBar 탭 전환: 탭 인덱스 변경(쿼리/내부 상태) + 햅틱 `tickWeak`\n- TextField 입력: 값 변경(숫자만) / 유효성 실패 시 필드 아래 안내 Typography 표시\n- “결과 보기” 버튼:\n  - 탭 시 모든 TextField `blur`로 키보드 내리기\n  - 유효성 성공: `navigate('/result', { state: { input, source: 'input' } })` + 햅틱 `success`\n"
+  },
+  {
+    "id": "0007",
+    "title": "S3 결과 페이지(/result) 구현(계산/재계산/공유/저장/에러)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/result에서 state 또는 공유 쿼리(s)를 기반으로 입력을 확정하고 simulate()로 결과를 렌더링해요. 공유 디코딩 실패 시 Toast 1회 후 홈으로 이동하고, state가 없으면 빈 상태를 보여줘요. 결과 화면 내에서 투자수익률/집값상승률을 TextField+적용 버튼으로 즉시 재계산하며, 공유 BottomSheet에서 링크 복사를 제공해요.",
+      "acceptance_criteria": [
+        "location.state가 undefined이고 s도 없을 때 '결과를 표시할 수 없어요' + '홈으로' 버튼이 보이고, 버튼 탭 시 navigate('/')가 1회 호출되면 PASS / 문구·버튼·이동 중 하나라도 없으면 FAIL (AC-S3-4)",
+        "/result?s=... 디코딩이 ShareDecodeError를 반환하면 300ms 이내 Toast '공유 링크가 올바르지 않아요'가 1회 표시되고 navigate('/')가 1회 호출되면 PASS / 둘 중 하나라도 없으면 FAIL (AC-S3-3)",
+        "유효 입력이 확정되면 결과 카드 섹션(전세/월세/매매)이 각각 1개씩 총 3개 렌더링되면 PASS / 3개 미만/초과면 FAIL (게이트는 라우트 래퍼에서 처리)",
+        "투자수익률 입력이 0~30 밖에서 '적용' 탭 시 validate 문구 '투자수익률은 0~30%만 입력할 수 있어요'가 표시되고 결과 재계산이 실행되지 않으면 PASS / 문구 없거나 재계산되면 FAIL",
+        "공유 BottomSheet에서 '링크 복사' 탭 시 copyTextToClipboard가 호출되고 성공 시 Toast가 1회 표시되면 PASS / 호출 없거나 토스트 미표시면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S3-3",
+      "AC-S3-4"
+    ],
+    "files": [
+      "src/pages/ResultPage.tsx"
+    ],
+    "definition_of_done": [
+      "결과 화면에는 'AI가 생성한 결과입니다' 라벨을 표시하지 않음(본 기능은 AI 결과물이 아님)",
+      "외부 링크 이동(window.open/location.href) 없음",
+      "저장은 HistoryStore.saveFromInput로 수행(성공/실패 UI 토스트 처리, console.error 금지)",
+      "공유 링크는 encodeSharePayload로 생성한 s를 사용(길이 제한 준수)"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "data_model: HistoryEntry save via HistoryStore to 'rentcheck.history.v1'; share via query '?s='",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS AppBar, Typography, ListRow(카드형 섹션), Chip(추천 표시), TextField(투자수익률/집값상승률 입력), Button(적용/입력수정/히스토리/홈으로/공유), BottomSheet(공유), Toast(복사 성공/오류), Spacing.\n\n레이아웃:\n- 상단: AppTopBar(title='비교 결과', backButton) + 우측 '공유' 버튼(또는 본문 상단 버튼)\n- 유효 입력 확정 전:\n  - (1) state도 s도 없으면 빈 상태(문구 + 홈으로 버튼)\n  - (2) s가 있고 디코딩 실패면 토스트 후 즉시 홈 이동(화면 잔류 최소화)\n- 유효 입력 확정 후:\n  - 추천 인사이트(heading/caption) + 추천 옵션 Chip\n  - 결과 카드 3개(전세/월세/매매): ListRow로 섹션 구성, 각 카드에 최종 순자산(원화 포맷) 표시\n  - '공통 설정 즉시 재계산': TextField 2개 + Button '적용'\n  - 비용표: ListRow 반복(고정 행 수), 금액은 formatKRW\n- 공유 BottomSheet:\n  - 제목 '공유하기', 본문에 '링크를 복사해서 보내면 돼요'\n  - 버튼: primary '링크 복사', secondary '닫기'(왼쪽 버튼 라벨은 닫기)\n\n상호작용:\n- '입력 수정' 버튼: navigate('/input', { state:{ input } })\n- '히스토리' 버튼: navigate('/history')\n- 주요 CTA 햅틱 success, 보조 탭 tickWeak\n"
+  },
+  {
+    "id": "0008",
+    "title": "S4 히스토리 페이지(/history) 구현(목록/삭제/빈상태/에러)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "최근 5개 기록을 목록으로 보여주고 탭 시 /input으로 재진입해요. 로딩(최대 300ms) 문구를 표시하고, 0개면 빈 상태(홈으로 CTA)를 제공해요. 전체 삭제는 Dialog로 확인 후 localStorage를 []로 저장하고 즉시 빈 상태로 전환해요.",
+      "acceptance_criteria": [
+        "로드 중 '기록을 불러오는 중...' 문구가 표시되면 PASS / 표시되지 않으면 FAIL (AC-S4-1)",
+        "히스토리 항목 ListRow 탭 시 navigate('/input',{state:{input:entry.input}})가 1회 호출되면 PASS / 호출 없으면 FAIL (AC-S4-2)",
+        "loadHistory가 실패(READ_FAIL/PARSE_FAIL)하면 300ms 이내 Toast '저장된 기록을 불러오지 못했어요'가 1회 표시되면 PASS / 미표시 또는 2회 이상이면 FAIL (AC-S4-3)",
+        "'전체 삭제'를 Dialog에서 '삭제'로 확정하면 localStorage 'rentcheck.history.v1'가 []로 저장되고 화면에 '저장된 기록이 없어요'가 표시되면 PASS / 둘 중 하나라도 아니면 FAIL (AC-S4-4)",
+        "entries가 0개일 때 '저장된 기록이 없어요' + '홈으로' 버튼이 보이고, 버튼 탭 시 navigate('/')가 1회 호출되면 PASS / 누락되면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S4-1",
+      "AC-S4-2",
+      "AC-S4-3",
+      "AC-S4-4"
+    ],
+    "files": [
+      "src/pages/HistoryPage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS AppBar/Typography/ListRow/Button/Dialog/Toast/Spacing만 사용",
+      "Dialog 왼쪽 버튼은 '닫기', 오른쪽 확인 버튼은 '삭제'",
+      "삭제 후 즉시 리스트 상태 갱신(HistoryStore.clearAll 사용)"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "data_model: HistoryEntry[] from 'rentcheck.history.v1' (read/write)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS AppBar, Typography, ListRow, Button, Dialog, Spacing, Toast.\n\n레이아웃:\n- AppTopBar(title='최근 기록', backButton)\n- 로딩 중: Typography '기록을 불러오는 중...'\n- 정상:\n  - entries.map으로 ListRow 렌더(제목=label, 부제=거주기간/날짜 등)\n  - 하단 버튼: secondary '전체 삭제'\n- 빈 상태:\n  - Typography '저장된 기록이 없어요'\n  - Button '홈으로'\n\n상호작용:\n- 항목 탭: navigate('/input', { state:{ input: entry.input } }) + 햅틱 tickWeak\n- 전체 삭제: Dialog open → confirm '삭제' 시 clearAll() + 햅틱 success, 닫기=tickWeak\n- 에러 토스트: '저장된 기록을 불러오지 못했어요' (1회)"
+  },
+  {
+    "id": "0009",
+    "title": "App 라우팅 연결 + Provider 장착(App.tsx)",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "React Router로 4개 경로('/', '/input', '/result', '/history')를 연결하고, 전역에서 HistoryProvider를 사용할 수 있게 App 트리에 장착해요. main.tsx는 수정하지 않으며, 각 페이지는 단독으로 컴파일/렌더링 가능해야 해요.",
+      "acceptance_criteria": [
+        "App.tsx에 Route가 정확히 4개 경로(/, /input, /result, /history)로 연결되면 PASS / 누락·오타가 있으면 FAIL",
+        "HistoryProvider가 Router 내부(또는 상위)에서 1회만 장착되면 PASS / 미장착 또는 중복 장착이면 FAIL",
+        "브라우저에서 '/' 진입 시 HomePage가 렌더링되면 PASS / 빈 화면이면 FAIL",
+        "main.tsx 파일이 변경되지 않으면 PASS / 변경되면 FAIL"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "각 페이지 import 경로 정리",
+      "Route element에 불필요한 래핑/광고 삽입 없음(다음 패킷에서 처리)"
+    ],
+    "depends_on": [
+      "0005",
+      "0006",
+      "0007",
+      "0008"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "UI 없음(라우팅만). react-router-dom Routes/Route 사용. Provider는 src/lib/state/HistoryStore.tsx의 HistoryProvider 사용."
+  },
+  {
+    "id": "0010",
+    "title": "결과 게이트(보상형 광고) + 배너 광고 배치 + 최종 UX 폴리시",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "/result는 추천/분석 결과 노출 전 보상형 광고 게이트를 반드시 거치도록 라우트 레벨에서 래핑해요. 광고 진행 중 문구를 표시하고, 완료 후에만 ResultPage가 DOM에 마운트되게 구성해 AC(게이트 전 카드 0개/완료 후 3개)를 만족시켜요. 하단 배너 AdSlot도 결과 화면 하단에 비침투적으로 배치해요.",
+      "acceptance_criteria": [
+        "TossRewardAd 완료 콜백 호출 전에는 ResultPage가 렌더링되지 않아 결과 카드 DOM 개수가 0이면 PASS / 1개 이상이면 FAIL (AC-S3-1)",
+        "TossRewardAd 완료 콜백 호출 후 ResultPage가 렌더링되어 결과 카드가 3개면 PASS / 3개 미만/초과면 FAIL (AC-S3-2)",
+        "게이트 진행 중 화면에 '광고 시청 후 결과가 열립니다' Typography가 표시되면 PASS / 표시되지 않으면 FAIL",
+        "AdSlot 배너가 결과 컨텐츠 하단(스크롤 끝 또는 하단 섹션 이후)에 렌더링되면 PASS / 상단을 가리거나 컨텐츠 중간을 과도하게 차단하면 FAIL",
+        "App.tsx 변경 후 전체 라우트가 컴파일되고 네비게이션이 동작하면 PASS / 런타임 크래시 또는 라우트 누락이면 FAIL"
+      ]
+    },
+    "covers": [
+      "AC-S3-1",
+      "AC-S3-2"
+    ],
+    "files": [
+      "src/components/ResultGate.tsx",
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "ResultGate는 template 제공 TossRewardAd, AdSlot만 사용(다른 광고 SDK 금지)",
+      "RewardAd는 결과 페이지에만 적용(입력/홈/히스토리에는 적용하지 않음)",
+      "고정 하단 요소가 있다면 safe-area paddingBottom 적용"
+    ],
+    "depends_on": [
+      "0009"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS Typography + Spacing로 게이트 로딩 문구 구성. 구조 예:\n- <TossRewardAd slotId=\"result-unlock\"> 내부에서 children(ResultPage) 렌더\n- 게이트 중에는 '광고 시청 후 결과가 열립니다' 표시\n- children 아래(또는 페이지 하단)에 <AdSlot slotId=\"result-banner\" /> 배치(컨텐츠를 가리지 않게 섹션 사이/하단)"
+  }
+]

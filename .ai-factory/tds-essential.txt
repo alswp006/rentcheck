@@ -1,0 +1,14 @@
+TDS 핵심 규칙 (자동 compliance 검사 항목 — 위반 시 빌드 실패):
+1. style={{}}에 margin/padding/fontSize/fontWeight/lineHeight/letterSpacing 사용 금지
+   → 여백: <Spacing size={16} />, ListRow의 padding prop (S/M/L/XL)
+   → 타이포: <Paragraph.Text typography="t3">제목</Paragraph.Text>  (t1~t7, st1~st13)
+2. HEX 색상 하드코딩 금지 (#FFFFFF, #3182F6 등)
+   → 대안: var(--tds-color-blue500), var(--tds-color-grey900) CSS 변수
+3. 커스텀 CSS는 flex/grid 레이아웃에만 허용. TDS 컴포넌트 스타일 덮어쓰기 금지.
+4. TDS 컴포넌트 import: import { Button, ListRow, Paragraph, Spacing, Tab, TextField, Top, Toast, AlertDialog } from '@toss/tds-mobile';
+5. Button variant: 'fill' | 'weak' (NOT 'secondary', 'ghost', 'outline')
+6. Typography: <Paragraph.Text typography="st6">본문</Paragraph.Text> (NOT b1, b2, c1, c2)
+7. Tab: <Tab><Tab.Item selected={..}>탭1</Tab.Item></Tab> (NOT value/onChange 패턴)
+8. TextField: help prop (NOT helperText), hasError prop
+9. Toast: text prop 필수 (NOT children), position prop 필수
+10. Top(AppBar): <Top><Top.TitleParagraph>제목</Top.TitleParagraph></Top> (NOT title prop)

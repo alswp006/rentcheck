@@ -107,8 +107,8 @@ describe("localStorage 저장소 헬퍼(History + UIState)", () => {
       getItem: (key: string) => store[key] ?? null,
       setItem: (key: string, value: string) => {
         callCount++;
-        // Throw only on the second call (upsertHistory's setItem)
-        if (callCount > 1) {
+        // Throw on the first call (upsertHistory's setItem)
+        if (callCount === 1) {
           throw quotaError;
         }
         store[key] = value;

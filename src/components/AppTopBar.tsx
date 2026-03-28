@@ -12,11 +12,7 @@ export function AppTopBar({ title, backButton = false, right }: AppTopBarProps):
   const navigate = useNavigate();
 
   const handleBack = (): void => {
-    try {
-      navigate(-1);
-    } catch {
-      navigate('/');
-    }
+    navigate(-1);
   };
 
   return (
@@ -26,7 +22,6 @@ export function AppTopBar({ title, backButton = false, right }: AppTopBarProps):
           ‹
         </button>
       )}
-      <Top.TitleParagraph>{title}</Top.TitleParagraph>
       {right}
     </Top>
   );

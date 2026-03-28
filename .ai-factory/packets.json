@@ -1,0 +1,381 @@
+[
+  {
+    "id": "0001",
+    "title": "[Types] 코어 타입/데이터모델/서비스 인터페이스 + RouteState 계약",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "SPEC의 공통 타입(Result/AppErrorCode/Paginated)과 데이터 모델(PresetScenario/SimulationInput/SimulationResult/HistoryEntry/SharePayload 등), 서비스 인터페이스, 페이지 간 navigate()/location.state를 고정하는 RouteState를 src/lib/types.ts에 순수 타입으로만 정의해요.",
+      "acceptance_criteria": [
+        "src/lib/types.ts에 런타임 코드(함수/상수/클래스/side-effect)가 0개여야 한다(import type/export type/interface만 존재).",
+        "RouteState가 export되고, 키가 정확히 \"/\", \"/input\", \"/result\", \"/history\" 4개여야 한다.",
+        "SimulationInputUserField가 'id'|'createdAt'|'updatedAt'를 제외한 keyof SimulationInput의 유니온으로 정의되어야 한다.",
+        "Result<T,E> 타입이 ok:true/value 또는 ok:false/error의 판별 유니온이어야 한다."
+      ]
+    },
+    "covers": [
+      "Task 1.1"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "Vite dev 서버가 타입 에러 없이 시작된다.",
+      "추가/수정된 파일이 단일 파일(src/lib/types.ts)이며, 빌드 시 tree-shaking에 영향 줄 런타임 코드가 없다."
+    ],
+    "depends_on": [],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "[Services+Storage] 프리셋 4개 + 입력 정규화/검증 + HistoryStorage 구현",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "프리셋 서비스(list/get), 입력 정규화+검증(고정 에러 문구/메타필드 보정/UUID fallback), 그리고 localStorage 히스토리 CRUD(최대 5개, createdAt DESC, page=1만 허용, 에러코드 매핑)를 구현해요. 모든 함수는 throw 없이 Result로 실패를 반환해요.",
+      "acceptance_criteria": [
+        "presetService.listPresets()는 항상 page=1,total=4,items.length=4를 반환하고, 4개 id가 모두 서로 달라야 한다.",
+        "presetService.getPresetById(id): 존재 시 ok:true/value.id===id, 미존재 시 ok:false/error.code==='NOT_FOUND'를 반환해야 한다(throw 금지).",
+        "validationService.validate(): stayPeriodYears=0 입력 시 ok:false이고 fieldErrors.stayPeriodYears가 정확히 \"거주기간은 1~30년만 가능해요\"여야 한다.",
+        "validationService.validate(): buyEquityKRW > buyPriceKRW이면 ok:false이고 fieldErrors.buyEquityKRW가 정확히 \"자기자본은 매매가 이하여야 해요\"여야 한다.",
+        "validationService 실패 시 fieldErrors에 'id'|'createdAt'|'updatedAt' 키가 절대 포함되면 안 된다(각 키 in fieldErrors === false).",
+        "historyStorage.prepend(entry) 성공 시 localStorage key 'rentcheck_history_v1'는 JSON 배열이며, 첫 항목 id===entry.id이고 길이<=5여야 한다.",
+        "historyStorage.list({page:1,pageSize:k}) 성공 시 items.length<=k이고 createdAt 내림차순 정렬이어야 한다.",
+        "historyStorage.list({page:2,...})는 ok:false/error.code==='PAGE_OUT_OF_RANGE'를 반환해야 한다(throw 금지).",
+        "historyStorage가 저장값 파싱에 실패하면 ok:false/error.code==='STORAGE_PARSE'를 반환해야 한다(throw 금지)."
+      ]
+    },
+    "covers": [
+      "AC-PS-1",
+      "AC-PS-2",
+      "AC-PS-3",
+      "AC-PS-4",
+      "AC-VS-1",
+      "AC-VS-2",
+      "AC-VS-3",
+      "AC-VS-4",
+      "AC-HS-1",
+      "AC-HS-2",
+      "AC-HS-3",
+      "AC-HS-4"
+    ],
+    "files": [
+      "src/lib/presetService.ts",
+      "src/lib/uuid.ts",
+      "src/lib/validationService.ts",
+      "src/lib/storage/storageErrors.ts",
+      "src/lib/storage/historyStorage.ts"
+    ],
+    "definition_of_done": [
+      "모든 exported 함수는 try/catch로 외부 예외를 Result로 변환하고, 호출자에게 throw하지 않는다.",
+      "저장소 키는 명세대로 rentcheck_history_v1를 사용한다.",
+      "프로덕션 빌드에 console.error 호출을 추가하지 않는다."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "[Calc/Share/LastInput/State] 시뮬레이션+인사이트, 공유 인코드/디코드, LastInputStorage, 히스토리 훅",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "SimulationService.calculate/createInsight, ShareService.buildShareUrl/parseShareSearch(v=1), base64 유틸, 마지막 입력 스냅샷 저장소(rentcheck_last_input_v1), 그리고 Home/History 공용 히스토리 로딩 훅(로딩 상태 최대 200ms 노출)을 구현해요. 모든 실패는 Result로 반환하고 NaN/Infinity 위험은 CALC_ERROR로 막아요.",
+      "acceptance_criteria": [
+        "simulationService.calculate() 성공 시 value.results.length===3이고 순서가 JEONSE, MONTHLY, BUY로 고정이어야 한다.",
+        "simulationService.calculate(): stayPeriodYears=N이면 모든 optionResult.netWorthByYearKRW.length가 N+1이어야 한다.",
+        "simulationService.calculate(): 사전 검증 위반(예: jeonseLoanRatio=1.5)이면 ok:false/error.code==='INVALID_INPUT'를 반환해야 한다(throw 금지).",
+        "simulationService.calculate(): 계산 중 NaN/Infinity 위험 감지 시 ok:false/error.code==='CALC_ERROR'를 반환해야 한다(throw 금지).",
+        "shareService.buildShareUrl() 성공 시 반환 url 문자열에 '?v=1&s='가 포함되고 payload.version===1이어야 한다.",
+        "shareService.parseShareSearch(): v!==1이면 ok:false/error.code==='UNSUPPORTED_VERSION'를 반환해야 한다.",
+        "shareService.parseShareSearch(): base64/JSON 파싱 실패 시 ok:false/error.code==='DECODE_ERROR'를 반환해야 한다(throw 금지).",
+        "lastInputStorage.load(): 저장값이 없으면 ok:true/value===null이어야 한다.",
+        "lastInputStorage.save(): quota 에러로 판별되면 ok:false/error.code==='STORAGE_QUOTA'를 반환해야 한다(throw 금지).",
+        "useHistory 훅: 최초 호출 시 loading이 true가 되었다가(최대 200ms 내) false로 전환되어야 하고, 성공 시 items가 historyStorage.list 결과와 동일해야 한다."
+      ]
+    },
+    "covers": [
+      "AC-SS-1",
+      "AC-SS-2",
+      "AC-SS-3",
+      "AC-SS-4",
+      "F3-AC-1",
+      "F3-AC-2",
+      "F3-AC-3",
+      "F3-AC-4",
+      "F3-AC-5",
+      "F3-AC-7",
+      "AC-SH-1",
+      "AC-SH-2",
+      "AC-SH-3",
+      "AC-SH-4",
+      "AC-LI-1",
+      "AC-LI-2",
+      "AC-LI-3",
+      "AC-LI-4"
+    ],
+    "files": [
+      "src/lib/simulationService.ts",
+      "src/lib/base64.ts",
+      "src/lib/shareService.ts",
+      "src/lib/storage/lastInputStorage.ts",
+      "src/hooks/useHistory.ts"
+    ],
+    "definition_of_done": [
+      "모든 서비스 함수는 외부에서 예외가 관측되지 않도록 Result로만 반환한다.",
+      "localStorage 키 rentcheck_last_input_v1를 사용한다.",
+      "calc/share는 브라우저 API 미지원 케이스에서 throw 없이 실패 Result를 반환한다."
+    ],
+    "depends_on": [
+      "0001",
+      "0002"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "[Page /] 홈: 프리셋 4개 선택 + 최근 히스토리 프리뷰 + 빠른 시작",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "홈(/)에서 프리셋 4개를 ListRow로 보여주고, 선택 시 /input으로 presetId를 state로 전달해요. 아래에 최근 히스토리 프리뷰(최대 2~3개)와 전체 보기 버튼으로 /history 이동을 제공해요. 데이터는 useHistory 훅으로 로딩/빈상태/에러를 분기해요.",
+      "acceptance_criteria": [
+        "프리셋 4개가 화면에 항상 렌더링되고, 각 항목 탭 시 navigate('/input', { state:{ presetId } })가 호출되어야 한다(RouteState 준수).",
+        "최근 히스토리가 0개면 빈 상태 문구 + '입력 시작할게요' 버튼이 보이고, 버튼 탭 시 /input으로 이동해야 한다.",
+        "최근 히스토리가 1개 이상이면 createdAt 내림차순으로 표시되고, 항목 탭 시 navigate('/result', { state:{ input, historyId } })가 호출되어야 한다.",
+        "로딩 상태는 Typography로 '불러오고 있어요' 텍스트가 보이고, 로딩 종료 후 리스트/빈상태 중 하나로 전환되어야 한다.",
+        "UI는 @toss/tds-mobile 컴포넌트만 사용하고, 여백은 Spacing 또는 ListRow padding만 사용해야 한다(커스텀 padding/margin 금지)."
+      ]
+    },
+    "covers": [
+      "F1"
+    ],
+    "files": [
+      "src/pages/HomePage.tsx"
+    ],
+    "definition_of_done": [
+      "모바일 뷰포트(360~420px)에서 가로 스크롤/오버플로우 없이 동작한다.",
+      "모든 터치 타겟(ListRow/버튼)이 44px 이상 높이로 렌더링된다(TDS 기본)."
+    ],
+    "depends_on": [
+      "0002",
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS AppBar(title=\"전세·월세·매매 비교\"), TDS Typography, TDS ListRow, TDS Button, TDS Spacing, (필요 시) TDS Toast\n- 섹션 1: \"프리셋으로 시작\" heading3 + ListRow 4개(각각 subTitle로 간단 설명)\n- 섹션 2: \"최근 비교\" heading3\n  - Loading: Typography(\"불러오고 있어요\")\n  - Empty: Typography(\"아직 저장된 결과가 없어요\") + Button(large, primary, \"입력 시작할게요\")\n  - List: 최근 항목 ListRow(최대 3) + Button(\"전체 보기\")\n- 인터랙션: ListRow 탭 시 tickWeak 햅틱(가능한 곳에만 적용)"
+  },
+  {
+    "id": "0005",
+    "title": "[Page /input] 입력: 3탭(전세/월세/매매) 폼 + 공통 설정 + 검증/에러 표시",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/input에서 전세/월세/매매 입력을 Chip(탭 역할)로 전환하고, 공통 필드를 하단에 배치해요. presetId state가 있으면 프리셋 값을 초기 주입하고, 없으면 LastInputSnapshot을 로드해 복원해요. '결과 볼래요' 제출 시 blur() 후 validate→성공 시 /result로 이동해요.",
+      "acceptance_criteria": [
+        "전세/월세/매매 탭(Chip 3개) 중 하나만 selected 상태이며, 탭 변경 시 해당 섹션 필드가 교체 렌더링되어야 한다.",
+        "모든 숫자 입력 TextField는 inputMode가 numeric 또는 decimal 중 하나로 설정되어야 한다(KRW= numeric, 비율/금리=decimal).",
+        "제출 버튼 탭 시 document.activeElement가 input이면 blur()가 호출되어 키보드가 닫혀야 한다.",
+        "validate 실패 시 해당 필드의 고정 에러 문구가 TextField 하단에 표시되어야 하고, 첫 에러 필드가 화면에 보이도록 브라우저 기본 스크롤로 이동해야 한다.",
+        "validate 성공 시 navigate('/result', { state:{ input } })가 호출되어야 하며(RouteState 준수), 동시에 lastInputStorage.save가 시도되어야 한다.",
+        "lastInputStorage.save가 ok:false로 실패하면 Toast가 열리고, 확인 가능한 고정 문구 1개가 표시되어야 한다(문구는 코드 상수로 고정)."
+      ]
+    },
+    "covers": [
+      "F2"
+    ],
+    "files": [
+      "src/pages/InputPage.tsx"
+    ],
+    "definition_of_done": [
+      "새로고침 후 /input 재진입 시(프리셋 state 없음) 마지막 입력 스냅샷이 로드되어 폼에 채워진다.",
+      "TDS 컴포넌트 외 UI 라이브러리를 추가하지 않는다."
+    ],
+    "depends_on": [
+      "0001",
+      "0002",
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS AppBar(title=\"입력할게요\", backButton)\n- 상단: Chip 3개(전세/월세/매매) 가로 배치, selected=현재 탭\n- 폼: TDS TextField들로 구성(필드별 label/placeholder), 에러는 TextField 하단 고정 문구로 표시\n  - 전세 섹션: jeonseDepositKRW, jeonseLoanRatio, jeonseLoanRateAPR\n  - 월세 섹션: monthlyDepositKRW, monthlyRentKRW, monthlyRentIncreaseRateAnnual\n  - 매매 섹션: buyPriceKRW, buyEquityKRW, buyLoanRateAPR, buyLoanPeriodYears, buyRepaymentType(Chip 3개: 원리금균등/원금균등/만기일시)\n  - 공통 섹션: initialAssetKRW, stayPeriodYears, investmentReturnRateAnnual, housePriceGrowthRateAnnual\n- 하단 CTA: Button(primary, large, \"결과 볼래요\")\n- 상태: 로드 중(스냅샷 로드)에는 Typography(\"불러오고 있어요\")\n- 간격: Spacing만 사용, TextField/리스트에 커스텀 padding/margin 금지"
+  },
+  {
+    "id": "0006",
+    "title": "[Page /result] 결과: 요약 + 추천 + 비용 분석표 + 상세 게이팅(보상형) + 배너 광고 + 공유",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/result에서 (1) location.search 공유 파라미터 우선 파싱, (2) location.state input 사용 순으로 입력을 복원해요. calculate로 결과를 만들고, 요약 3카드/비용 분석표를 노출한 뒤 비용 분석표 섹션 다음에 AdSlot 1개를 배치해요. 상세(표/차트/AI 인사이트)는 TossRewardAd로 게이팅하고, 공유는 navigator.share 지원 시 사용, 미지원 시 클립보드로 fallback해요.",
+      "acceptance_criteria": [
+        "입력 복원 우선순위가 (a) shareService.parseShareSearch(location.search) 성공, (b) location.state.input, (c) 그 외 empty 상태 순으로 동작해야 한다.",
+        "calculate 성공 시 요약 섹션에 3 옵션(전세/월세/매매)의 핵심 지표가 표시되고, Chip 선택에 따라 표시 값이 즉시 전환되어야 한다.",
+        "비용 분석표 섹션이 렌더링된 다음(아래) 위치에 AdSlot 컴포넌트가 정확히 1개 렌더링되어야 한다(오버레이/고정 배치 금지).",
+        "상세 결과 영역은 TossRewardAd로 감싸져 있어야 하며, 광고 완료 전에는 상세(ListRow/차트/AI 인사이트)가 DOM에 렌더링되지 않아야 한다(게이팅).",
+        "상세 결과 영역 상단에 \"AI가 생성한 결과입니다\" 라벨이 항상 노출되어야 한다.",
+        "공유 버튼 탭 시 buildShareUrl이 호출되고, navigator.share 지원 시 share를 사용하되 미지원이면 클립보드 복사로 fallback해야 한다. 어떤 경우에도 window.open/window.location.href로 외부 이동 코드가 없어야 한다.",
+        "calculate 또는 parseShareSearch가 실패하면 에러 상태 UI(문구 + '다시 계산할게요' 버튼)가 표시되어야 하며, 버튼 탭 시 재계산이 시도되어야 한다.",
+        "결과 생성 성공 시 historyStorage.prepend가 호출되어 최근 5개 히스토리 유지 규칙이 적용되어야 한다(실패 시 Toast 고정 문구 표시)."
+      ]
+    },
+    "covers": [
+      "F4",
+      "AC-SH-1",
+      "AC-SH-2",
+      "AC-SS-1",
+      "AC-HS-1"
+    ],
+    "files": [
+      "src/pages/ResultPage.tsx"
+    ],
+    "definition_of_done": [
+      "광고 배치가 콘텐츠 흐름을 끊지 않고(비용 분석표 이후) 스크롤 자연스럽게 이어진다.",
+      "프로덕션 빌드에서 console.error를 추가하지 않는다."
+    ],
+    "depends_on": [
+      "0001",
+      "0002",
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 결과 (\"/result\")\n\n### Layout\n```tsx\n<AppBar\n  title=\"비용 비교 결과예요\"\n  backButton\n  rightIcon={/* 공유 아이콘 버튼 ReactNode */}\n/>\n\n<Spacing size={16} />\n\n{/* Pattern A: Hero Summary Card */}\n<div style={{ backgroundColor: 'var(--tds-color-grey50)', borderRadius: 16, padding: 20 }}>\n  <Typography variant=\"caption1\" color=\"secondary\">가장 유리한 선택</Typography>\n  <Spacing size={8} />\n  <Typography variant=\"heading1\">매매가 유리해요</Typography>\n  <Spacing size={4} />\n  <Typography variant=\"body2\" color=\"tertiary\">거주기간 기준 총비용이 가장 낮아요</Typography>\n</div>\n\n<Spacing size={12} />\n\n{/* Pattern B: Filter Chips Row */}\n<div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>\n  <Chip label=\"전세\" variant=\"outlined\" />\n  <Chip label=\"월세\" variant=\"outlined\" />\n  <Chip label=\"매매\" variant=\"filled\" selected />\n</div>\n\n{/* 요약 지표 */}\n<Spacing size={16} />\n<ListRow title=\"총비용\" subTitle=\"거주기간 동안\" right={/* '12,340만원' 텍스트 */} padding=\"L\" />\n<ListRow title=\"월평균 부담\" subTitle=\"평균 기준\" right={/* '245만원' 텍스트 */} padding=\"L\" />\n<ListRow title=\"마지막 순자산\" subTitle=\"투자수익률 반영\" right={/* '8,120만원' 텍스트 */} padding=\"L\" />\n\n{/* 비용 분석표 섹션 */}\n<Spacing size={24} />\n<Typography variant=\"heading3\">비용 분석표예요</Typography>\n<Spacing size={12} />\n<ListRow title=\"보증금/자기자본\" right={/* 값 */} padding=\"M\" />\n<ListRow title=\"대출이자\" right={/* 값 */} padding=\"M\" />\n<ListRow title=\"월세/상환액\" right={/* 값 */} padding=\"M\" />\n<ListRow title=\"기회비용(투자)\" right={/* 값 */} padding=\"M\" />\n\n{/* 배너 광고: 비용 분석표 이후 */}\n<Spacing size={16} />\n{/* <AdSlot /> */}\n\n{/* 상세 결과: 보상형 광고 게이팅 */}\n<Spacing size={24} />\n<Typography variant=\"heading3\">상세 결과예요</Typography>\n<Spacing size={12} />\n{/* Pattern G: AI Disclosure Badge */}\n<div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8, backgroundColor: 'var(--tds-color-grey50)' }}>\n  <Typography variant=\"caption2\" color=\"tertiary\">AI가 생성한 결과입니다</Typography>\n</div>\n<Spacing size={12} />\n{/* <TossRewardAd> */}\n<ListRow title=\"연도별 총비용\" subTitle=\"표/차트\" padding=\"L\" />\n<ListRow title=\"연도별 순자산\" subTitle=\"표/차트\" padding=\"L\" />\n<ListRow title=\"AI 인사이트\" subTitle=\"요약 문장\" padding=\"L\" />\n{/* </TossRewardAd> */}\n```\n\n### States\n- Loading:\n  - `<Typography variant=\"body2\" color=\"tertiary\">결과를 계산하고 있어요</Typography>`\n  - `<Spacing size={16} />`\n  - 요약 영역은 Hero 카드 형태 유지, 값은 비워두고 설명만 노출(텍스트만)\n- Empty: (Pattern E)\n  - 입력/공유 파라미터가 없어서 결과를 만들 수 없는 경우\n  - “아직 결과가 없어요” + “입력으로 돌아가기” 버튼\n- Error:\n  - `<Typography variant=\"body2\" color=\"tertiary\">입력 값을 다시 확인해주세요</Typography>`\n  - `<Spacing size={12} />`\n  - `<Button variant=\"primary\" size=\"large\">다시 계산할게요</Button>`\n\n### Interactions\n- 상단 뒤로가기(AppBar backButton)\n  - 탭: 이전 화면으로 이동\n  - 햅틱: `tickWeak`\n- 상단 공유(rightIcon)\n  - 탭: 공유 BottomSheet(또는 시스템 공유 시트) 오픈\n  - 햅틱: `tickWeak`\n  - 정책: `window.open`, `window.location.href` 사용 금지(클립보드/Share Sheet만)\n- 전세/월세/매매 Chip 선택\n  - 탭: 선택 시나리오 변경(요약/표/상세 결과 동기 업데이트)\n  - 햅틱: `tickWeak`\n- “상세 결과” 영역 진입(보상형 광고)\n  - `TossRewardAd` 내부 콘텐츠 탭/스크롤 전: 광고 시청 플로우 진행\n  - 광고 완료 후 상세 표/차트/ListRow 노출\n- 에러 상태 “다시 계산할게요” 버튼\n  - 탭: 재계산 트리거\n  - 햅틱: `success`\n- (전역 1회) AI 사전 고지\n  - **App.tsx/메인 레이아웃에 Pattern H Dialog** 배치\n  - 확인 탭 햅틱: `tickWeak`\n"
+  },
+  {
+    "id": "0007",
+    "title": "[Page /history] 히스토리: 최근 5개 전체 리스트 + 결과 재진입",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "/history에서 historyStorage.list({page:1,pageSize:5})로 최근 5개를 로드해 ListRow로 보여줘요. 각 항목은 생성 시각/프리셋 여부를 부제목으로 표시하고 탭 시 /result로 state(input, historyId)를 전달해요. 비어있으면 홈으로 가는 CTA를 제공해요.",
+      "acceptance_criteria": [
+        "히스토리 0개면 빈 상태 문구 + '홈으로 갈게요' 버튼이 보이고, 버튼 탭 시 navigate('/')가 호출되어야 한다.",
+        "히스토리 1개 이상이면 최대 5개가 createdAt 내림차순으로 표시되어야 한다.",
+        "리스트 항목 탭 시 navigate('/result', { state:{ input, historyId } })가 호출되어야 한다(RouteState 준수).",
+        "historyStorage.list가 ok:false이면 에러 문구 + '다시 불러올게요' 버튼이 노출되고, 버튼 탭 시 list를 재시도해야 한다.",
+        "UI는 TDS ListRow/Button/Typography/Spacing/AppBar만 사용하고 커스텀 여백 스타일을 추가하지 않아야 한다."
+      ]
+    },
+    "covers": [
+      "AC-HS-1",
+      "AC-HS-2",
+      "F1"
+    ],
+    "files": [
+      "src/pages/HistoryPage.tsx"
+    ],
+    "definition_of_done": [
+      "새로고침 후에도 히스토리가 유지되고(로컬스토리지), 최대 5개 제한이 UI에 반영된다."
+    ],
+    "depends_on": [
+      "0002",
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS AppBar(title=\"최근 결과\", backButton)\n- 본문 상태\n  - Loading: Typography(\"불러오고 있어요\")\n  - Empty: Typography(\"아직 저장된 결과가 없어요\") + Button(primary, large, \"홈으로 갈게요\")\n  - Error: Typography(\"불러오지 못했어요\") + Button(secondary, large, \"다시 불러올게요\")\n  - List: ListRow 최대 5개(타이틀=예: \"전세/월세/매매 비교\", subTitle=생성일시 텍스트), 탭 가능\n- 간격: Spacing만 사용"
+  },
+  {
+    "id": "0008",
+    "title": "[Integration-1] App 라우팅 연결(React Router) + 메인 레이아웃/하단 TabBar",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "src/App.tsx에서 React Router로 4개 라우트(/,/input,/result,/history)를 모두 연결하고, 홈/히스토리로 이동하는 플로팅 하단 TabBar를 포함한 공통 레이아웃을 구성해요. Input/Result는 플로우 화면이라 TabBar가 겹치지 않게 레이아웃에서 분기 렌더링해요.",
+      "acceptance_criteria": [
+        "브라우저에서 '/', '/input', '/result', '/history'로 직접 진입 시 각 페이지 컴포넌트가 렌더링되어야 한다(화이트 스크린/라우트 미스 금지).",
+        "MainTabBar에 최소 2개 탭(홈, 히스토리)이 있고, 각 탭 탭 시 해당 경로로 navigate되어야 한다.",
+        "TabBar가 fixed 하단일 경우 paddingBottom에 env(safe-area-inset-bottom)를 포함한 계산식이 적용되어 iOS에서 버튼이 잘리지 않아야 한다.",
+        "Input/Result 화면에서는 TabBar가 콘텐츠와 겹치지 않도록(표시 안 함 또는 레이아웃 분기) 처리되어야 한다."
+      ]
+    },
+    "covers": [
+      "Routing"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/MainTabBar.tsx"
+    ],
+    "definition_of_done": [
+      "main.tsx는 수정하지 않는다(@AI:ANCHOR).",
+      "라우팅 연결 후에도 앱이 컴파일되고, 모든 라우트가 동작한다."
+    ],
+    "depends_on": [
+      "0004",
+      "0005",
+      "0006",
+      "0007"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- React Router: Routes/Route/Outlet 사용\n- 공통 레이아웃\n  - 홈/히스토리: 페이지 콘텐츠 + 하단 고정 MainTabBar\n  - 입력/결과: TabBar 미노출(또는 별도 레이아웃)\n- MainTabBar: TDS TabBar 사용(플로팅 형태), 탭 라벨은 한국어(홈/히스토리)\n- Safe area: fixed 영역에 paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' 형태 적용"
+  },
+  {
+    "id": "0009",
+    "title": "[Integration-2] 최종 UX 폴리시: 1회 AI 사전 고지 Dialog + TabBar 햅틱/접근성 보강",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "AI 결과 정책 준수를 위해 /result 최초 진입 시 1회만 AI 사전 고지 Dialog를 노출하고(localStorage 플래그), 확인 시 다시 뜨지 않게 처리해요. 또한 MainTabBar 탭 클릭에 tickWeak 햅틱을 추가하고, 접근성(aria-label)과 안전영역 스타일을 최종 점검해요.",
+      "acceptance_criteria": [
+        "/result 경로에 처음 진입하면 Dialog가 1회 표시되어야 하고, Dialog의 왼쪽 버튼 텍스트는 \"닫기\"여야 한다(취소 금지).",
+        "Dialog 확인(또는 닫기) 이후 localStorage 플래그가 저장되어, 같은 기기에서 /result 재진입 시 Dialog가 다시 표시되지 않아야 한다.",
+        "MainTabBar의 각 탭 탭 시 generateHapticFeedback({type:'tickWeak'})가 호출되어야 한다(호출 지점이 탭 클릭 핸들러).",
+        "외부 도메인 이동 코드(window.open/window.location.href)가 App.tsx/MainTabBar에 존재하지 않아야 한다.",
+        "프로덕션 빌드 경로에서 console.error를 새로 추가하지 않아야 한다."
+      ]
+    },
+    "covers": [
+      "Policy-AI-Disclosure"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/MainTabBar.tsx",
+      "src/lib/uiCopy.ts"
+    ],
+    "definition_of_done": [
+      "Dialog/TabBar 변경 후에도 모든 라우트가 정상 동작한다.",
+      "고정 문구는 src/lib/uiCopy.ts 상수로만 참조되어 문자열이 여러 군데 중복되지 않는다."
+    ],
+    "depends_on": [
+      "0008"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- AI 사전 고지 Dialog (TDS Dialog)\n  - 제목: 예) \"AI 결과 안내\"\n  - 본문: AI 생성 결과가 포함됨을 안내하는 한국어 문구(상수로 고정)\n  - 버튼: 왼쪽 \"닫기\", 오른쪽 \"확인\"(또는 단일 확인)\n- MainTabBar\n  - 탭 클릭 햅틱 tickWeak\n  - safe area paddingBottom 유지/강화\n  - 아이콘 사용 시 lucide-react만 사용(이모지 금지)"
+  },
+  {
+    "id": "0010",
+    "title": "라우팅 와이어링 + Provider 연결 + 통합 폴리시",
+    "epic": "4",
+    "task": {
+      "description": "App.tsx에 모든 페이지(HomePage.tsx, InputPage.tsx, ResultPage.tsx, HistoryPage.tsx) Route 연결, main.tsx 수정 금지(@AI:ANCHOR), 광고/결제 연동, 최종 UX 폴리시",
+      "acceptance_criteria": [
+        "App.tsx에 모든 페이지 Route가 정의되어 있다",
+        "모든 navigate() 대상에 Route가 존재한다",
+        "main.tsx의 ThemeProvider/BrowserRouter가 유지되어 있다",
+        "앱이 '/' 경로에서 정상 렌더링된다"
+      ]
+    },
+    "files": [
+      "src/App.tsx"
+    ],
+    "covers": [],
+    "definition_of_done": [
+      "typecheck pass",
+      "all routes accessible",
+      "no console errors"
+    ],
+    "depends_on": [
+      "0009"
+    ]
+  }
+]

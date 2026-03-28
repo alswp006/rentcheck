@@ -1,0 +1,72 @@
+TDS 핵심 규칙 — 실제 @toss/tds-mobile .d.ts에서 검증됨 (2026-03-28)
+위반 시 tsc 에러 발생. 이 파일의 API가 다른 문서와 충돌하면 이 파일이 우선.
+
+=== 스타일 규칙 ===
+1. style={{}}에 margin/padding/fontSize/fontWeight 사용 금지 → TDS 컴포넌트 내장 스타일 사용
+2. HEX 색상 하드코딩 금지 → var(--tds-color-*) CSS 변수 사용
+3. 커스텀 CSS는 flex/grid 레이아웃에만 허용
+
+=== 컴포넌트별 필수 API (Required props 반드시 포함) ===
+
+Top (상단 내비게이션):
+  - title: ReactNode (REQUIRED!)
+  - 사용법: <Top title={<Top.TitleParagraph>제목</Top.TitleParagraph>} />
+  - ❌ 잘못된 사용: <Top><Top.TitleParagraph>제목</Top.TitleParagraph></Top>
+  - 선택: right?, upper?, lower?, subtitleTop?, subtitleBottom?
+
+Button:
+  - variant: 'fill' | 'weak' (ONLY 이 2개)
+  - ❌ 잘못된 값: 'primary', 'secondary', 'ghost', 'outline' — 존재하지 않음
+  - 선택: color?, size?, disabled?, onClick
+
+TextField:
+  - variant: 'box' | 'line' | 'big' | 'hero' (REQUIRED!)
+  - ❌ variant 없이 사용하면 tsc 에러
+  - 선택: label?, help? (NOT helperText), hasError?, suffix?, inputMode?, value, onChange
+
+Tab:
+  - onChange: (index: number, key?: string | number) => void (REQUIRED!)
+  - Tab.Item: selected: boolean (REQUIRED!), ❌ value prop 없음
+  - 사용법: <Tab onChange={(i) => setIdx(i)}><Tab.Item selected={idx===0}>탭1</Tab.Item></Tab>
+
+ListRow:
+  - ❌ padding prop 없음 — 존재하지 않는 prop
+  - ListRow.Texts: type prop REQUIRED (예: type="2RowTypeA")
+    - type="2RowTypeA" + top + bottom (2줄)
+    - type="1RowTypeA" + top (1줄)
+  - ListRow.Text: 단일 텍스트 (deprecated → ListRow.LeftText 권장)
+  - 선택: onClick?
+
+AlertDialog:
+  - open?: boolean, title?: ReactNode, description?: ReactNode
+  - alertButton: ReactNode (AlertDialog.AlertButton 사용)
+  - onClose: () => void (REQUIRED for dismissal)
+  - 닫기 버튼 텍스트는 반드시 "닫기" (NOT "취소" — 토스 UX)
+
+Toast:
+  - open: boolean (REQUIRED!)
+  - position: 'top' | 'bottom' (REQUIRED!)
+  - onClose?: () => void
+
+Spacing:
+  - size: string | number (REQUIRED!)
+  - ❌ size 없이 <Spacing /> 사용하면 에러
+  - direction?: 'vertical' | 'horizontal'
+
+Paragraph.Text (Typography):
+  - typography: string (t1~t7, st1~st13)
+  - ❌ 'heading1', 'body1', 'caption1' 등은 존재하지 않음
+
+Badge: 존재함 (사용 가능)
+Border: 존재함 (구분선)
+BottomSheet: open, onClose, title?, children
+
+=== 환각 방지: "모르면 지어내지 말고 확인하라" ===
+- 이 파일에 없는 컴포넌트나 prop을 사용하려면 → tds-reference.txt를 먼저 확인
+- tds-reference.txt에도 없으면 → 그 컴포넌트/prop은 존재하지 않는다고 판단
+- 존재하지 않는 prop을 추측해서 사용하면 tsc 에러 발생 → 절대 금지
+- TDS로 구현이 불확실한 UI → 기본 HTML(<div>, <span>) + var(--tds-color-*) CSS 변수로 대체
+- 대체 시에도 Tailwind 클래스 금지, inline style의 flex/grid 레이아웃만 허용
+
+=== import 패턴 ===
+import { Top, Button, TextField, Tab, ListRow, AlertDialog, Toast, Spacing, Paragraph, Badge, Border, BottomSheet } from '@toss/tds-mobile';

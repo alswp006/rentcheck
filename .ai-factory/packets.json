@@ -1,0 +1,435 @@
+[
+  {
+    "id": "0001",
+    "title": "도메인/스토리지/라우팅 Type 정의 고정",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "SPEC에 등장하는 데이터 모델, Storage Contract 결과 유니온, 그리고 페이지 간 location.state 계약(RouteState)을 단일 소스로 확정해요. 이후 모든 페이지/유틸은 이 타입만 import해서 런타임 state 불일치를 방지해요.",
+      "acceptance_criteria": [
+        "`src/lib/types.ts`에 runtime 코드(함수/상수/side effect) 없이 type/interface/export만 존재한다.",
+        "다음 타입이 모두 `export` 된다: `PresetScenario`, `SimulationInput`, `BuyRepaymentType`, `SimulationResult`, `NetWorthPoint`, `RecommendedOption`, `HistoryEntry`, `SharePayloadV1`.",
+        "다음 타입이 모두 `export` 된다: `StorageErrorCode`, `DraftReadResult`, `DraftWriteResult`, `HistoryReadResult`, `HistoryUpsertResult`, `HistoryDeleteAllResult`.",
+        "`RouteState`가 `\"/\" | \"/simulate\" | \"/result\" | \"/history\" | \"/share\"` 각 경로의 state 타입을 포함하고, `/simulate`/`/result`/`/history`는 SPEC의 유니온/nullable 계약을 그대로 표현한다.",
+        "프로젝트가 TypeScript 에러 없이 빌드/컴파일된다."
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "`pnpm build`(또는 템플릿 빌드 커맨드)에서 타입 에러가 없다.",
+      "다른 파일에서 `import type { RouteState }`가 가능하다."
+    ],
+    "depends_on": [],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "SC-1/SC-2 localStorage 헬퍼 구현(draft/history)",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "HTTP API 없이 localStorage만 사용해 Draft/History를 SC-1/SC-2 계약대로 CRUD해요. 모든 예외는 throw로 앱을 죽이지 않고 ok/errorCode 유니온으로 반환해요. 키는 tossUserId 스코프를 반드시 포함해요.",
+      "acceptance_criteria": [
+        "`readDraftInput(tossUserId)`는 (1) 키 미존재 시 `{ ok:true, value }`로 기본 입력을 반환하거나 호출부가 에러 UI 없이 기본값을 사용 가능한 형태를 반환한다(SC1-AC-1 충족 가능).",
+        "Draft READ에서 JSON.parse 실패 시 `{ ok:false, errorCode:'STORAGE_PARSE_ERROR', fallback:'DEFAULT_INPUT' }`를 반환하고 함수 호출이 throw 하지 않는다(SC1-AC-3).",
+        "Draft WRITE 성공 시 `localStorage.getItem(key)`를 `JSON.parse` 했을 때 입력 객체와 primitive deep-equal 이다(SC1-AC-2).",
+        "Draft WRITE에서 QuotaExceededError 발생 시 `{ ok:false, errorCode:'STORAGE_QUOTA_EXCEEDED' }`를 반환하고, 실패 전/후 `getItem(key)` 문자열이 동일하다(SC1-AC-5).",
+        "`readHistory(tossUserId)`는 키 미존재 시 `{ ok:true, value: [] }`를 반환한다(SC2-AC-1).",
+        "History UPSERT는 기존 5개에서 1회 upsert 후 결과 길이가 5이고 새 entry가 index 0이며 이전 마지막 항목이 제거된다(SC2-AC-2).",
+        "History READ parse error 시 `{ ok:false, errorCode:'STORAGE_PARSE_ERROR', fallback:'EMPTY_ARRAY' }`를 반환하고 throw 하지 않는다(SC2-AC-3).",
+        "History UPSERT는 내부 READ가 ok가 아니면 setItem을 호출하지 않고 에러를 그대로 반환한다(손상 상태 덮어쓰기 금지).",
+        "`deleteAllHistory(tossUserId)` 성공 후 즉시 `readHistory`를 호출하면 빈 배열을 얻는다."
+      ]
+    },
+    "covers": [
+      "SC1-AC-1",
+      "SC1-AC-2",
+      "SC1-AC-3",
+      "SC1-AC-5",
+      "SC2-AC-1",
+      "SC2-AC-2",
+      "SC2-AC-3"
+    ],
+    "files": [
+      "src/lib/storage/draft.ts",
+      "src/lib/storage/history.ts"
+    ],
+    "definition_of_done": [
+      "Draft/History 모든 public 함수가 예외를 throw 하지 않는다(try/catch로 DOMException 처리).",
+      "키 네이밍이 `rc_draft_input_v1:${tossUserId}`, `rc_history_v1:${tossUserId}`로 고정된다."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "세션 플래그(Context) + 500ms 디바운스 훅",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "SC1-AC-4를 만족하기 위해 localStorage가 불가한 세션에서 draft 저장을 완전히 차단하는 Context를 만들고, 입력 변경을 500ms 디바운스로 저장할 수 있는 훅을 제공해요. Provider는 App 연결 전에도 단독 컴파일돼요.",
+      "acceptance_criteria": [
+        "`StorageSessionProvider`로 감싼 하위 컴포넌트에서 `useStorageSession()` 호출 시 `{ draftDisabled, disableDraftForSession }`를 얻는다.",
+        "`disableDraftForSession()` 호출 이후 동일 Provider 생명주기 동안 `draftDisabled===true`가 유지된다(SC1-AC-4 구현 기반).",
+        "`useDebouncedEffect(effect,deps,delayMs)` 사용 시 deps가 변경되고 delayMs 경과 전 재변경되면 이전 타이머가 취소되어 effect가 1회만 실행된다.",
+        "두 파일 추가 후 앱이 컴파일된다(라우팅/App 미연결 상태 포함)."
+      ]
+    },
+    "covers": [
+      "SC1-AC-4"
+    ],
+    "files": [
+      "src/lib/state/StorageSessionContext.tsx",
+      "src/lib/state/useDebouncedEffect.ts"
+    ],
+    "definition_of_done": [
+      "Context/훅에 외부 패키지 의존이 없다.",
+      "React StrictMode(개발)에서 중복 실행에 의해 draftDisabled가 false로 되돌아가지 않는다."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "프리셋 4종 상수 + 기본 입력 팩토리",
+    "epic": "Epic 2 (Core Logic)",
+    "task": {
+      "description": "번들에 포함되는 프리셋 4종과 기본 입력 생성 함수를 제공해요. 페이지는 presetId 또는 직접 입력 플로우에서 동일한 SimulationInput shape를 항상 얻을 수 있어요. (필드/기본값은 types.ts 기준으로 모두 채워요.)",
+      "acceptance_criteria": [
+        "`PRESET_SCENARIOS`가 길이 4인 배열로 export 된다.",
+        "각 preset의 `defaultInput`은 `SimulationInput`의 모든 필드를 포함하며 `undefined` 필드가 없다.",
+        "`getDefaultInput()`은 `SimulationInput`의 모든 필드를 포함한 새 객체를 반환한다(호출 간 참조 동일성 공유 금지).",
+        "프로젝트가 컴파일되며, 다른 모듈에서 `PRESET_SCENARIOS.map(p=>p.id)` 사용이 가능하다."
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/lib/presets.ts"
+    ],
+    "definition_of_done": [
+      "프리셋 id는 앱 내부에서 고유하며, `validateSimulateState`에서 검증 가능한 값들이다."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "시뮬레이션 엔진(runSimulation) 순수 함수 구현",
+    "epic": "Epic 2 (Core Logic)",
+    "task": {
+      "description": "UI와 분리된 순수 계산 함수로 SimulationInput을 SimulationResult로 변환해요. 순자산 시리즈(0..N), 추천 옵션(최종 순자산 최대/동률 전세 우선), 인사이트 문구, 민감도 값, 유한성 검증을 만족하도록 구현해요.",
+      "acceptance_criteria": [
+        "`runSimulation(input)`이 `SimulationResult`를 반환하며 외부 상태(localStorage/Date.now 등)에 의존하지 않는다.",
+        "`netWorthSeries.length === residencePeriodYears + 1` 이고 모든 point의 `year`가 0..N 범위다(F3-AC-1).",
+        "세 옵션(jeonse/wolse/buy) 중 `finalNetWorth`가 최대인 옵션이 `recommendedOption`으로 선택된다(F3-AC-2).",
+        "최종 순자산 동률이면 `recommendedOption.type === 'jeonse'`다(F3-AC-3).",
+        "입력의 관련 성장/수익률이 모두 0인 케이스에서 3옵션의 `finalNetWorth`가 모두 `initialAsset`과 동일하다(F3-AC-4).",
+        "`netWorthSeries` 내 모든 `netWorth`는 `Number.isFinite(...)===true`다(F3-AC-6).",
+        "지원하지 않는 `buyRepaymentType`이 들어오면 `throw new Error('지원하지 않는 상환방식입니다')`가 발생한다(F3-AC-7)."
+      ]
+    },
+    "covers": [
+      "F3-AC-1",
+      "F3-AC-2",
+      "F3-AC-3",
+      "F3-AC-4",
+      "F3-AC-6",
+      "F3-AC-7"
+    ],
+    "files": [
+      "src/lib/simulation/engine.ts"
+    ],
+    "definition_of_done": [
+      "엔진 내부에서 NaN/Infinity가 만들어지지 않도록 0 나눗셈/음수 입력을 방어한다(결과는 유한수로 클램프 또는 입력 검증 실패로 처리)."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0006",
+    "title": "공유 인코드/디코드 + SC-4 라우팅 가드(순수)",
+    "epic": "Epic 2 (Core Logic)",
+    "task": {
+      "description": "`/share?v=1&input=...`를 위한 base64 인코드/디코드 유틸과, 각 페이지에서 `location.state`를 동일 규칙으로 검증하는 SC-4 가드 함수를 제공해요. UI 표시 없이 ok/reason만 반환해요.",
+      "acceptance_criteria": [
+        "`encodeSharePayloadV1(input)`가 쿼리에 넣을 수 있는 문자열(base64)로 반환한다.",
+        "`decodeSharePayloadV1(encoded)`는 (1) v===1 검증 실패 또는 (2) 디코딩/파싱 실패 또는 (3) shape 검증 실패 시 `{ ok:false }`를 반환하고 throw 하지 않는다.",
+        "`validateSimulateState(null)`는 `{ ok:false, reason:'STATE_NULL' }`를 반환한다.",
+        "`validateSimulateState({ presetId:'not-exist', source:'home' })`는 `{ ok:false, reason:'INVALID_PRESET_ID' }`를 반환한다.",
+        "`validateResultState(null)`는 `{ ok:false, reason:'STATE_NULL' }`를 반환한다.",
+        "세 validate 함수가 `unknown` 입력만 받아도 컴파일되며, import만으로 앱이 빌드된다."
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/lib/share.ts",
+      "src/lib/routing/guards.ts"
+    ],
+    "definition_of_done": [
+      "base64는 브라우저에서 동작 가능한 UTF-8 처리(atob/btoa 보조 포함)로 구현된다.",
+      "가드 함수는 UI/라우팅을 직접 수행하지 않는다(순수 함수)."
+    ],
+    "depends_on": [
+      "0001",
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0007",
+    "title": "S1 홈 페이지(`/`) — 프리셋 선택 진입",
+    "epic": "Epic 3 (Pages)",
+    "task": {
+      "description": "제공된 TDS 블루프린트를 그대로 구현해 홈에서 프리셋 4개 또는 직접 입력으로 `/simulate`에 진입해요. 프리셋 탭/CTA 탭에 햅틱을 넣고, spacing은 Spacing만 사용해요.",
+      "acceptance_criteria": [
+        "`/`에서 프리셋 ListRow 4개와 하단 CTA 버튼이 렌더링된다.",
+        "프리셋 ListRow 탭 시 `navigate('/simulate',{ state:{ presetId, source:'home' } })`가 호출된다.",
+        "하단 CTA 탭 시 `navigate('/simulate',{ state:{ source:'home' } })`가 호출된다.",
+        "프리셋 탭에는 `generateHapticFeedback({ type:'tickWeak' })`, CTA에는 `generateHapticFeedback({ type:'success' })`가 호출된다.",
+        "Tailwind/인라인 padding/margin으로 TDS 여백을 덮어쓰지 않고, 간격은 `Spacing size={...}`로만 조절한다."
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/HomePage.tsx"
+    ],
+    "definition_of_done": [
+      "블루프린트와 동일한 컴포넌트 구조(Top, Paragraph.Text, ListRow, Chip, Button, Spacing)를 사용한다."
+    ],
+    "depends_on": [
+      "0001",
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "---\n## Screen: 홈(프리셋 선택) (`/`)\n\n### Layout\n```tsx\n// Pseudocode showing TDS component structure — NOT runnable code\n<Top title={<Top.TitleParagraph>RentCheck</Top.TitleParagraph>} />\n\n<Spacing size={16} />\n<Paragraph.Text typography=\"st7\" color=\"secondary\">\n  프리셋으로 빠르게 시작하거나, 직접 입력으로 시뮬레이션할 수 있어요\n</Paragraph.Text>\n\n<Spacing size={20} />\n\n// Preset 1\n<ListRow\n  onClick={() => {/* navigate('/simulate', { state: { presetId, source:'home' } }) */}}\n  contents={<ListRow.Texts type=\"2RowTypeA\" top=\"프리셋 1\" bottom=\"요약 설명을 보여줘요\" />}\n  right={\n    <div style={{ display: 'flex', gap: 8 }}>\n      <Chip label=\"전세\" />\n      <Chip label=\"추천\" />\n    </div>\n  }\n/>\n\n<Spacing size={8} />\n// Preset 2\n<ListRow\n  onClick={() => {/* navigate */}}\n  contents={<ListRow.Texts type=\"2RowTypeA\" top=\"프리셋 2\" bottom=\"요약 설명을 보여줘요\" />}\n  right={<Chip label=\"월세\" />}\n/>\n\n<Spacing size={8} />\n// Preset 3\n<ListRow\n  onClick={() => {/* navigate */}}\n  contents={<ListRow.Texts type=\"2RowTypeA\" top=\"프리셋 3\" bottom=\"요약 설명을 보여줘요\" />}\n  right={<Chip label=\"매매\" />}\n/>\n\n<Spacing size={8} />\n// Preset 4\n<ListRow\n  onClick={() => {/* navigate */}}\n  contents={<ListRow.Texts type=\"2RowTypeA\" top=\"프리셋 4\" bottom=\"요약 설명을 보여줘요\" />}\n  right={<Chip label=\"전세\" />}\n/>\n\n<Spacing size={24} />\n\n<div style={{ padding: 16 }}>\n  <Button variant=\"fill\" size=\"large\" onClick={() => {/* navigate('/simulate',{state:{source:'home'}}) */}}>\n    직접 입력할게요\n  </Button>\n</div>\n```\n\n### States\n- Loading: 없음(정적 프리셋)\n- Empty: 없음(프리셋 4개 번들 포함)\n- Error: 없음\n\n### Interactions\n- 프리셋 `ListRow` 탭 → `/simulate`로 이동 (`navigate('/simulate', { state: { presetId, source: 'home' } })`)\n  - 햅틱: `generateHapticFeedback({ type: 'tickWeak' })`\n- “직접 입력할게요” 버튼 탭 → `/simulate`로 이동 (`navigate('/simulate', { state: { source: 'home' } })`)\n  - 햅틱: `generateHapticFeedback({ type: 'success' })`\n---"
+  },
+  {
+    "id": "0008",
+    "title": "S2 입력 페이지(`/simulate`) — 폼/검증/Draft/리워드게이트",
+    "epic": "Epic 3 (Pages)",
+    "task": {
+      "description": "`/simulate`에서 탭(전세/월세/매매) 기반 입력 폼을 제공하고, Draft를 SC-1대로 복원/저장(500ms 디바운스)해요. localStorage 불가 시 세션 내 저장을 완전히 중단해요. “결과 보기” 클릭에서만 `TossRewardAd`로 1회 게이트 후 `/result`로 이동해요.",
+      "acceptance_criteria": [
+        "진입 시 `validateSimulateState(location.state)`로 상태를 검증하고, ok가 아니면 기본 입력으로 폼을 렌더링한다(빈 화면 금지).",
+        "Draft READ에서 `STORAGE_PARSE_ERROR`면 Toast가 1회 표시되고(문구 정확히) 기본값으로 폼이 렌더링된다: \"임시 저장 데이터를 불러올 수 없어요. 기본값으로 시작할게요\" (SC-1 UI behavior).",
+        "Draft READ/WRITE에서 `STORAGE_UNAVAILABLE`면 Toast(문구 정확히) 표시 후 `disableDraftForSession()`을 호출하고, 이후 동일 세션 동안 `writeDraftInput` 호출이 0회다(SC1-AC-4).",
+        "숫자 입력 TextField는 `inputMode=\"numeric\"` 및 `pattern=\"[0-9]*\"`를 가진다(SPEC 모바일 UX).",
+        "TextField focus 시 `scrollIntoView({ block:'center' })`가 호출되어 입력이 화면 중앙으로 이동한다(SPEC 모바일 UX).",
+        "입력 변경 후 500ms 동안 변화가 없을 때만 draft WRITE가 1회 호출된다(디바운스 저장).",
+        "“결과 보기” 버튼 탭 시에만 `TossRewardAd`를 통해 게이트가 실행되고, 광고 완료 후에만 `navigate('/result',{ state:{ input, label, source:'simulate' } })`가 호출된다(게이트 위치 고정)."
+      ]
+    },
+    "covers": [
+      "SC1-AC-3",
+      "SC1-AC-4"
+    ],
+    "files": [
+      "src/pages/SimulatePage.tsx"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트만 사용(ListRow, TextField, Button, Paragraph.Text, Tab, Chip, Toast, AlertDialog, Spacing).",
+      "간격은 Spacing만 사용하고, 커스텀 CSS는 레이아웃(flex/width) 목적에만 사용한다."
+    ],
+    "depends_on": [
+      "0002",
+      "0003",
+      "0004",
+      "0005",
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Top: 타이틀 \"조건 입력\"(또는 동등 의미). 우측에 히스토리 진입 버튼(텍스트 버튼) 배치 가능.\n- TDS Tab: 3개 탭(전세/월세/매매). 선택 탭에 따라 아래 입력 섹션이 바뀜.\n- 공통 섹션(모든 탭):\n  - Paragraph.Text 안내 문구 1줄\n  - TextField(숫자) 최소 2개: `residencePeriodYears`, `initialAsset` (inputMode/pattern 적용)\n- 전세 탭 섹션: TextField(숫자) 1~2개(예: 보증금/대출 등) — 정확한 필드는 `SimulationInput` 기준으로 렌더\n- 월세 탭 섹션: TextField(숫자) 1~2개(예: 보증금/월세 등)\n- 매매 탭 섹션: TextField(숫자) + Chip(또는 Tab)로 `buyRepaymentType` 선택\n- 하단 CTA(고정 아님, 스크롤 하단): Button size=\"large\" variant=\"fill\" 라벨 \"결과 보기\"\n- Draft 복원/저장 UX:\n  - 최초 mount: `readDraftInput` 호출 후 결과에 따라 Toast 표시(문구 SPEC 고정) 및 기본값/저장값으로 폼 세팅\n  - 입력 변경: 500ms debounce 후 `writeDraftInput` (단, `draftDisabled`면 0회)\n- 리워드 게이트:\n  - “결과 보기” 액션에서만 `<TossRewardAd slotId=\"simulate-result-unlock\">`를 사용해 게이트 후 `/result`로 navigate\n  - `/result` 컴포넌트 자체에는 TossRewardAd를 넣지 않음(히스토리 재열람 면제)\n- 모바일 키보드: 각 TextField onFocus에서 `e.currentTarget.scrollIntoView({ block:'center' })`\n- 햅틱: 탭/칩 선택 tickWeak, “결과 보기” success"
+  },
+  {
+    "id": "0009",
+    "title": "S3 결과 페이지(`/result`) — 결과 렌더/히스토리 저장/공유/배너광고",
+    "epic": "Epic 3 (Pages)",
+    "task": {
+      "description": "`/result`는 어떤 진입이든 자체 리워드게이트를 요구하지 않아요. state로 받은 input을 엔진으로 계산해 결과를 표시하고, 저장 버튼으로 SC-2 UPSERT를 수행해요. 저장 실패 시 SPEC 문구로 AlertDialog를 띄우고, 화면 최하단에 `AdSlot` 배너를 1개 고정 배치해요.",
+      "acceptance_criteria": [
+        "`/result`는 `TossRewardAd`를 렌더링/호출하지 않는다(진입 경로 무관).",
+        "`validateResultState(location.state)`가 ok이면 `runSimulation(input)`으로 결과를 계산해 화면에 표시한다.",
+        "배너 광고 `AdSlot`이 결과 화면 최하단(분석표 이후)에 1개 렌더링된다(SPEC 배너 위치).",
+        "“히스토리에 저장” 버튼 탭 시 `upsertHistory`가 1회 호출된다.",
+        "History 저장 중 `STORAGE_QUOTA_EXCEEDED`이면 AlertDialog가 열리고 메시지가 정확히 \"저장공간이 부족해 히스토리를 저장할 수 없어요\" 이다(SC-2 UI behavior).",
+        "History 저장 중 `STORAGE_UNAVAILABLE`이면 AlertDialog 메시지가 정확히 \"저장소에 접근할 수 없어요. 이 기기에서는 히스토리를 저장할 수 없어요\" 이다(SC-2 UI behavior).",
+        "공유 버튼 탭 시 현재 input을 `encodeSharePayloadV1`로 인코딩한 `/share?v=1&input=...` 문자열을 생성하고, (1) `navigator.share`가 있으면 호출, (2) 없으면 클립보드 복사 또는 BottomSheet로 링크를 보여준다(외부 링크 이동 금지)."
+      ]
+    },
+    "covers": [
+      "SC2-AC-2"
+    ],
+    "files": [
+      "src/pages/ResultPage.tsx"
+    ],
+    "definition_of_done": [
+      "결과 화면에서 Tailwind/임의 padding을 사용하지 않고 Spacing으로만 간격을 조절한다.",
+      "AlertDialog의 왼쪽 버튼 라벨은 \"닫기\"를 사용한다(취소 금지)."
+    ],
+    "depends_on": [
+      "0002",
+      "0005",
+      "0006",
+      "0008"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Top: 타이틀 \"결과\". 우측에 공유 버튼(텍스트/아이콘) 배치.\n- 본문:\n  - Paragraph.Text: 추천 결과 요약 1~2줄(예: \"이번 조건에서는 전세가 유리해요\")\n  - ListRow 여러 개로 요약 카드 구성:\n    - 추천 옵션, 최종 순자산(숫자 텍스트), 주요 비용 요약(있다면)\n  - (차트는 아직 placeholder): Paragraph.Text로 \"순자산 흐름\" 섹션 제목 + 간단 목록(연도별 값) 또는 요약 표시\n  - 저장 섹션: Button variant=\"fill\" size=\"large\" 라벨 \"히스토리에 저장\"\n  - 공유 섹션: Button variant=\"weak\" size=\"large\" 라벨 \"링크로 공유\"\n- 저장 실패:\n  - QUOTA_EXCEEDED/UNAVAILABLE는 AlertDialog로만 처리(문구 SPEC 고정)\n- 배너 광고:\n  - 분석표/리스트 이후 최하단에 `<AdSlot slotId=\"result-bottom\" />` 1개\n  - 콘텐츠와 겹치지 않게 스크롤 콘텐츠 끝에 배치\n- 햅틱: 저장 success, 공유 tickWeak"
+  },
+  {
+    "id": "0010",
+    "title": "S4 히스토리 페이지(`/history`) — 목록/재열람/전체삭제",
+    "epic": "Epic 3 (Pages)",
+    "task": {
+      "description": "localStorage의 히스토리(최대 5개)를 읽어 최신순으로 리스트 표시해요. 항목 탭 시 `/result`로 이동하되 리워드게이트 없이 재열람돼요. parse error면 크래시 없이 에러 문구를 표시하고 목록은 0개로 처리해요. 전체삭제를 제공해요.",
+      "acceptance_criteria": [
+        "진입 시 `readHistory(tossUserId)`를 호출한다.",
+        "키 미존재로 빈 배열인 경우, 에러 문구 없이 빈 상태 UI(아이콘+문구+CTA)가 표시되고 ListRow가 0개다(SC2-AC-1).",
+        "READ가 `STORAGE_PARSE_ERROR`면 `Paragraph.Text`로 정확히 \"히스토리를 불러올 수 없어요\"가 표시되고 ListRow가 0개다(SC-2 UI behavior).",
+        "ListRow 항목 탭 시 `navigate('/result',{ state:{ input: entry.input, label: entry.label, source:'history' } })`가 호출되고, 이 흐름에서 `TossRewardAd`는 표시되지 않는다(재열람 면제).",
+        "“전체 삭제” 실행 후 즉시 리스트가 0개로 갱신되고, 이후 `readHistory`가 빈 배열을 반환한다."
+      ]
+    },
+    "covers": [
+      "SC2-AC-1",
+      "SC2-AC-3"
+    ],
+    "files": [
+      "src/pages/HistoryPage.tsx"
+    ],
+    "definition_of_done": [
+      "목록은 최대 5개만 렌더되며(스토리지 캡), 스크롤 성능 최적화(가상화)는 불필요하게 추가하지 않는다(MVP).",
+      "삭제 확인은 AlertDialog로 처리하고 왼쪽 버튼은 \"닫기\"다."
+    ],
+    "depends_on": [
+      "0002",
+      "0006",
+      "0009"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Top: 타이틀 \"히스토리\"\n- 본문 상태:\n  1) 정상 + items>0:\n    - ListRow 반복 렌더: 상단 텍스트=entry.label, 하단 텍스트=생성일(간단 포맷)\n    - 우측에는 Chip(예: 추천 옵션 타입) 또는 \"보기\" 텍스트\n    - 상단 또는 하단에 Button variant=\"weak\" 라벨 \"전체 삭제\"\n  2) 빈 상태(items===0):\n    - lucide-react 아이콘 1개(예: History)\n    - Paragraph.Text: \"저장된 결과가 없어요\"\n    - Button variant=\"fill\" size=\"large\": \"시뮬레이션 하러 가기\" → `/simulate`\n  3) parse error:\n    - Paragraph.Text: \"히스토리를 불러올 수 없어요\" (정확 문구)\n    - 목록은 0개\n- 햅틱: 항목 탭 tickWeak, 전체삭제 확정 warning(또는 tickWeak)"
+  },
+  {
+    "id": "0011",
+    "title": "S5 공유 진입 페이지(`/share`) — 디코딩 후 simulate로 전달",
+    "epic": "Epic 3 (Pages)",
+    "task": {
+      "description": "`/share?v=1&input=...`로 들어오면 query를 디코딩해 SimulationInput을 복원하고, 성공 시 `/simulate`로 `state:{ input, source:'share' }`로 즉시 이동해요(replace). 실패 시 오류 화면을 보여주고 홈으로 돌아갈 수 있어요.",
+      "acceptance_criteria": [
+        "`location.search`에서 `v`와 `input`을 읽고 `decodeSharePayloadV1`를 호출한다.",
+        "디코딩 성공 시 `navigate('/simulate',{ state:{ input: payload.input, source:'share' }, replace:true })`가 1회 호출된다.",
+        "디코딩 실패 시 크래시 없이 오류 상태 UI(아이콘+Paragraph.Text+Button)가 렌더링된다.",
+        "오류 상태의 CTA 버튼 탭 시 `navigate('/')`가 호출된다.",
+        "외부 URL 이동(window.open/location.href)이 구현되어 있지 않다."
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/SharePage.tsx"
+    ],
+    "definition_of_done": [
+      "디코딩 성공 시 이 페이지에 머무르지 않고 바로 전환된다(사용자 조작 최소화)."
+    ],
+    "depends_on": [
+      "0006",
+      "0008"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- TDS Top: 타이틀 \"공유 링크 확인\"\n- 상태 1) 리다이렉트 중:\n  - Paragraph.Text: \"입력을 불러오고 있어요\"\n  - (가능하면) 간단 로딩 UI(Paragraph.Text만으로도 OK)\n- 상태 2) 실패:\n  - lucide-react 아이콘(예: Link2Off)\n  - Paragraph.Text: \"공유 링크가 올바르지 않아요\"\n  - Button variant=\"fill\" size=\"large\": \"홈으로 갈게요\""
+  },
+  {
+    "id": "0012",
+    "title": "통합(App.tsx) — 라우팅/Provider/TabBar 연결 + 최종 폴리시",
+    "epic": "Epic 4 (Integration)",
+    "task": {
+      "description": "React Router 라우트를 모두 연결하고(홈/입력/결과/히스토리/공유), `StorageSessionProvider`를 전역에 감싸요. 하단에는 TDS `TabBar`(2~5개 탭)를 플로팅 형태로 제공하고, safe-area inset을 반영해 토스 하단 영역과 겹치지 않게 마무리해요.",
+      "acceptance_criteria": [
+        "`src/App.tsx`에서 5개 라우트(`/`, `/simulate`, `/result`, `/history`, `/share`)가 모두 렌더 가능하도록 `Routes`/`Route`가 정의된다.",
+        "전역에 `StorageSessionProvider`가 적용되어 `/simulate`에서 `useStorageSession()`이 정상 동작한다.",
+        "TabBar가 하단에 고정으로 보이고 탭은 최소 2개(예: 홈/히스토리/입력 중 2~3개)이며 탭 전환 시 해당 경로로 `navigate` 된다.",
+        "TabBar 고정 영역은 `paddingBottom: calc(Npx + env(safe-area-inset-bottom))`을 포함해 iOS 안전영역에서 가려지지 않는다.",
+        "`main.tsx`는 수정하지 않는다(@AI:ANCHOR 준수)."
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "결과/공유 라우트는 TabBar에 노출되지 않아도 되지만 URL 접근 시 정상 렌더된다.",
+      "프로덕션 빌드에서 `console.error`를 호출하는 코드가 새로 추가되지 않는다."
+    ],
+    "depends_on": [
+      "0007",
+      "0008",
+      "0009",
+      "0010",
+      "0011"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- App Shell:\n  - `<StorageSessionProvider>`로 전체 라우트 감싸기\n  - `<Routes>`: HomePage, SimulatePage, ResultPage, HistoryPage, SharePage\n- 하단 네비게이션:\n  - TDS `TabBar` 고정(플로팅 형태)\n  - 탭 예시: \"홈\"( `/` ), \"입력\"( `/simulate` ), \"히스토리\"( `/history` )\n  - 결과(`/result`)와 공유(`/share`)는 탭에 포함하지 않음(딥링크/플로우 화면)\n- Safe area:\n  - fixed 하단 컨테이너에 `paddingBottom: 'calc(12px + env(safe-area-inset-bottom))'` 같은 형태로 안전영역 반영\n- 스타일 제한:\n  - 커스텀 CSS는 `position: fixed`, flex 정렬 등 레이아웃 용도만 사용\n  - TDS 여백은 덮어쓰기 금지(Spacing 사용)"
+  },
+  {
+    "id": "0013",
+    "title": "라우팅 와이어링 + Provider 연결 + 통합 폴리시",
+    "epic": "4",
+    "task": {
+      "description": "App.tsx에 모든 페이지(HomePage.tsx, SimulatePage.tsx, ResultPage.tsx, HistoryPage.tsx, SharePage.tsx) Route 연결, main.tsx 수정 금지(@AI:ANCHOR), 광고/결제 연동, 최종 UX 폴리시",
+      "acceptance_criteria": [
+        "App.tsx에 모든 페이지 Route가 정의되어 있다",
+        "모든 navigate() 대상에 Route가 존재한다",
+        "main.tsx의 ThemeProvider/BrowserRouter가 유지되어 있다",
+        "앱이 '/' 경로에서 정상 렌더링된다"
+      ]
+    },
+    "files": [
+      "src/App.tsx"
+    ],
+    "covers": [],
+    "definition_of_done": [
+      "typecheck pass",
+      "all routes accessible",
+      "no console errors"
+    ],
+    "depends_on": [
+      "0012"
+    ]
+  }
+]
